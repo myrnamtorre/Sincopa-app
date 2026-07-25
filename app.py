@@ -178,11 +178,17 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
     # Comprobar si el usuario pide explícitamente cambiar de canción
     pide_nueva_cancion = any(w in p_lower for w in ["evaluar otra", "nueva canción", "otra canción", "analizar otra", "cambiar de canción", "reset"])
 
-    # --- CONSULTA DE RECOMENDACIÓN / SUGERENCIA DIRECTA (SIN EVALUAR) ---
-    es_pregunta_sugerencia = any(w in p_lower for w in ["sugieres", "sugiere", "recomiendas", "recomienda", "opciones", "canciones de", "que canciones", "cuales canciones"])
+    # Detección amplia de consultas de recomendación
+    palabras_sugerencia = [
+        "sugerencia", "sugerencias", "sugieres", "sugiere", 
+        "recomienda", "recomiendame", "recomiéndame", "recomendacion", "recomendaciones", 
+        "opciones", "canciones", "ideas", "que escuchar"
+    ]
+    es_pregunta_sugerencia = any(w in p_lower for w in palabras_sugerencia)
 
+    # --- CONSULTA DE RECOMENDACIÓN DIRECTA EN ESTADO INICIAL ---
     if es_pregunta_sugerencia and st.session_state.step == "esperando_cancion":
-        gen_buscado = "Quebradita" if "quebradita" in p_lower or "banda" in p_lower else ("Bachata" if "bachata" in p_lower else "Salsa")
+        gen_buscado = "Quebradita" if ("quebradita" in p_lower or "banda" in p_lower) else ("Bachata" if "bachata" in p_lower else "Salsa")
         
         mod_txt = "Pareja / Mixto"
         if "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower:
@@ -224,7 +230,7 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
                 respuesta_seguimiento = f"👟 **Footwork / Zapateado en '{cancion_nombre}' (Quebradita):**\n\n¡Definitivamente! El footwork aquí es **Zapateado continuo y brincos alternados**, combinados con remates al compás."
 
         # A3: Recomendaciones de canciones o sugerencias de género
-        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones"]):
+        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones", "sugerencia", "sugerencias"]):
             gen_buscado = genero
             if "salsa" in p_lower:
                 gen_buscado = "Salsa"
