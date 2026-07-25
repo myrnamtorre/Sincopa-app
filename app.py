@@ -12,41 +12,6 @@ st.set_page_config(
     layout="centered"
 )
 
-st.markdown("""
-    <style>
-    .chat-bubble {
-        background-color: #f0f2f6;
-        border-radius: 12px;
-        padding: 20px;
-        border-left: 5px solid #1f77b4;
-        margin-top: 15px;
-        font-size: 15px;
-        color: #1a1a1a;
-        line-height: 1.6;
-    }
-    .chat-bubble-alert {
-        background-color: #fff3cd;
-        border-radius: 12px;
-        padding: 20px;
-        border-left: 5px solid #ffc107;
-        margin-top: 15px;
-        font-size: 15px;
-        color: #856404;
-    }
-    .metric-badge {
-        display: inline-block;
-        background-color: #e1edf7;
-        color: #1f77b4;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-weight: bold;
-        font-size: 13px;
-        margin-right: 8px;
-        margin-bottom: 8px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("💃 Síncopa: Asistente Coreográfico")
 st.caption("🤖 Agente de IA para Análisis Rítmico, Dinámica Coreográfica y Acondicionamiento")
 st.markdown("---")
@@ -65,7 +30,7 @@ st.markdown("### 🎵 Búsqueda y Evaluación Inteligente")
 
 cancion_artista = st.text_input(
     "Escribe el Nombre de la Canción y/o Artista:",
-    placeholder="Ej. Maykel Blanco, Septeto Acarey, Romeo Santos, Podcast de Ciencia..."
+    placeholder="Ej. Yo Represento, Maykel Blanco, Aventura, Podcast de Ciencia..."
 )
 
 # ENGINE INTELIGENTE DE EXTRACCIÓN ACOUSTICA
@@ -105,18 +70,13 @@ if st.button("💬 Consultar al Asistente Coreográfico"):
         st.error("⚠️ Por favor escribe el nombre de una canción o artista.")
     else:
         with st.spinner("🤖 Extrayendo parámetros rítmicos y calculando exigencia física..."):
-            time.sleep(0.6)
+            time.sleep(0.5)
             
             features = extraer_features_inteligentes(cancion_artista)
             
             if not features["es_musica"]:
-                st.markdown("""
-                <div class="chat-bubble-alert">
-                    🤖 <b>Asistente Síncopa:</b><br><br>
-                    La pista ingresada ha sido filtrada por el <b>Guardrail de Audición</b> como <b>Voz Hablada / Contenido No Musical</b>.<br><br>
-                    ⚠️ <b>Diagnóstico:</b> No se detectó una métrica percusiva constante (beat stability < 0.15). Al carecer de compases de baile, no es posible estimar footwork ni generar plan de entrenamiento.
-                </div>
-                """, unsafe_allow_html=True)
+                st.warning("⚠️ **Diagnóstico del Asistente:** Contenido No Musical / Voz Hablada")
+                st.info("La pista ingresada fue filtrada por el **Guardrail de Audición**. No se detectó una métrica percusiva constante (beat stability < 0.15). Al carecer de compases de baile, no es posible estimar footwork ni generar plan de entrenamiento.")
             else:
                 tempo_val = features["tempo"]
                 secciones_val = features["secciones"]
@@ -128,69 +88,60 @@ if st.button("💬 Consultar al Asistente Coreográfico"):
                 else:
                     prediccion_ml = "Salsa"
 
-                # Generación de la evaluación completa con Footwork, Exigencia Física y Ejercicios
-                if prediccion_ml == "Bachata":
-                    msg = f"""
-                    Pista analizada: <b>{features['cancion_formateada']}</b><br>
-                    Clasificación del Modelo: <b>Bachata</b> (Tempo: <b>{tempo_val} BPM</b> | <b>{secciones_val} secciones</b>)<br><br>
-                    
-                    <span class="metric-badge">👟 Footwork Sugerido: 1.0 - 1.5 min</span>
-                    <span class="metric-badge">🔥 Exigencia Física: Moderada (6/10)</span>
-                    <span class="metric-badge">🎯 Enfasis: Fluidez & Control de Caderas</span><br><br>
-
-                    💡 <b>Análisis y Sugerencias Coreográficas:</b><br>
-                    • <b>Distribución de Pista:</b> Mantener figuras en pareja (*pareja/sensual*) durante los bloques melódicos (2.0 min) y reservar <b>1.0 a 1.5 minutos de footwork</b> (pasitos libres) para el repique del requinto y el majao.<br>
-                    • <b>Exigencia Física:</b> Demanda moderada centrada en disociación de torso y control de cadencia en tiempos de acentuación (tap en 4 y 8).<br><br>
-
-                    🏋️‍♀️ <b>Ejercicios Recomendados para Entrenar esta Coreografía:</b><br>
-                    1. <b>Disociación pélvica y de torso:</b> 3 series de 1 min de aislamientos laterales con metrónomo a 124 BPM.<br>
-                    2. <b>Agilidad de tobillos y planta:</b> Ejercicios de punteo rápido (taps) y cambio de peso continuo para marcar repiques limpios.<br>
-                    3. <b>Core y Estabilidad:</b> Planchas abdominales dinámicas para sostener las ondas y aislamientos corporales sin perder el balance.
-                    """
-                elif prediccion_ml == "Salsa":
-                    msg = f"""
-                    Pista analizada: <b>{features['cancion_formateada']}</b><br>
-                    Clasificación del Modelo: <b>Salsa / Timba</b> (Tempo: <b>{tempo_val} BPM</b> | <b>{secciones_val} secciones</b>)<br><br>
-                    
-                    <span class="metric-badge">👟 Footwork Sugerido: 1.5 - 2.0 min</span>
-                    <span class="metric-badge">🔥 Exigencia Física: Alta (8.5/10)</span>
-                    <span class="metric-badge">🎯 Enfasis: Velocidad & Precisión</span><br><br>
-
-                    💡 <b>Análisis y Sugerencias Coreográficas:</b><br>
-                    • <b>Distribución de Pista:</b> Se recomienda integrar <b>1.5 a 2.0 minutos de footwork/shines</b> durante las descargas de metales y el mambo, complementando con *turn patterns* veloces en pareja.<br>
-                    • <b>Exigencia Física:</b> Elevada demanda cardiovascular. Exige respuesta rápida de piernas y resistencia en hombros/brazos para las vueltas continuas.<br><br>
-
-                    🏋️‍♀️ <b>Ejercicios Recomendados para Entrenar esta Coreografía:</b><br>
-                    1. <b>Agilidad de pies (Ladder Drills):</b> Rutinas de escalera de agilidad para acelerar la velocidad de reacción en los *shines*.<br>
-                    2. <b>Capacidad Cardiovascular (HIIT):</b> Intervalos de alta intensidad (30 seg sprint / 15 seg descanso) para soportar la intensidad del ritmo sin fatiga.<br>
-                    3. <b>Fuerza de hombros y escápulas:</b> Prensas de hombro con liga de resistencia para mantener el marco (*frame*) firme durante las vueltas veloces.
-                    """
-                else:
-                    msg = f"""
-                    Pista analizada: <b>{features['cancion_formateada']}</b><br>
-                    Clasificación del Modelo: <b>Quebradita</b> (Tempo: <b>{tempo_val} BPM</b> | <b>{secciones_val} secciones</b>)<br><br>
-
-                    <span class="metric-badge">👟 Footwork / Zapateado: 2.0 - 2.5 min</span>
-                    <span class="metric-badge">🔥 Exigencia Física: Muy Alta (9.5/10)</span>
-                    <span class="metric-badge">🎯 Enfasis: Potencia Plyométrica</span><br><br>
-
-                    💡 <b>Análisis y Sugerencias Coreográficas:</b><br>
-                    • <b>Distribución de Pista:</b> Requiere <b>2.0 a 2.5 minutos de footwork/zapateado continuo</b> y brincos (*mbo*), alternando con acrobacias o cargadas en pareja.<br>
-                    • <b>Exigencia Física:</b> Extremadamente alta (impacto articular y gasto calórico elevado).<br><br>
-
-                    🏋️‍♀️ <b>Ejercicios Recomendados para Entrenar esta Coreografía:</b><br>
-                    1. <b>Pliometría (Potencia de salto):</b> Salto de caja (*box jumps*) y saltos con sentadilla para maximizar la altura de los brincos.<br>
-                    2. <b>Fortalecimiento de gemelos y tobillos:</b> Elevaciones de talón ponderadas para proteger articulaciones durante el zapateado continuo.<br>
-                    3. <b>Fuerza de Tren Inferior:</b> Sentadillas y desplantes búlgaros para la estabilidad de rodillas en las caídas acrobáticas.
-                    """
-
-                st.markdown(f"""
-                <div class="chat-bubble">
-                    🤖 <b>Asistente Síncopa:</b><br><br>
-                    {msg}
-                </div>
-                """, unsafe_allow_html=True)
+                # ENCABEZADO Y RESULTADO PRINCIPAL
+                st.success(f"🎵 **Pista Evaluada:** {features['cancion_formateada']} | **Clasificación:** {prediccion_ml}")
                 
+                # MÉTRICAS EN COLUMNAS (TARJETAS NATIVAS)
+                col1, col2, col3 = st.columns(3)
+                
+                if prediccion_ml == "Bachata":
+                    col1.metric("👟 Footwork", "1.0 - 1.5 min")
+                    col2.metric("🔥 Exigencia Física", "6.0 / 10")
+                    col3.metric("🎯 Énfasis", "Caderas & Fluidez")
+                    
+                    st.markdown("### 💡 Análisis Coreográfico")
+                    st.write("• **Distribución de Pista:** Mantener figuras en pareja (*sensual/tradicional*) durante los bloques melódicos y reservar **1.0 a 1.5 minutos de pasitos libres (footwork)** durante los repiques del requinto.")
+                    st.write("• **Cadencia:** Tempo moderado que facilita marcaciones limpias del tap en los tiempos 4 y 8.")
+                    
+                    with st.expander("🏋️‍♀️ **Ver Rutina de Ejercicios Recomendados para Entrenar**", expanded=True):
+                        st.markdown("""
+                        1. **Disociación pélvica y de torso:** 3 series de 1 min de aislamientos laterales con metrónomo.
+                        2. **Agilidad de tobillos y planta:** Ejercicios de punteo rápido (*taps*) y cambio de peso continuo para repiques limpios.
+                        3. **Core y Estabilidad:** Planchas abdominales dinámicas para sostener ondas corporales con balance.
+                        """)
+
+                elif prediccion_ml == "Salsa":
+                    col1.metric("👟 Footwork / Shines", "1.5 - 2.0 min")
+                    col2.metric("🔥 Exigencia Física", "8.5 / 10")
+                    col3.metric("🎯 Énfasis", "Velocidad & Precisión")
+                    
+                    st.markdown("### 💡 Análisis Coreográfico")
+                    st.write("• **Distribución de Pista:** Integrar **1.5 a 2.0 minutos de footwork/shines** durante las descargas de metales y el mambo, complementando con *turn patterns* veloces en pareja.")
+                    st.write("• **Cadencia:** Ritmo acelerado y complejo que exige marcación exacta en tiempo 1 (On1) o tiempo 2 (On2/Mambo).")
+                    
+                    with st.expander("🏋️‍♀️ **Ver Rutina de Ejercicios Recomendados para Entrenar**", expanded=True):
+                        st.markdown("""
+                        1. **Agilidad de pies (Ladder Drills):** Rutinas de escalera de agilidad para acelerar la velocidad de reacción en los *shines*.
+                        2. **Capacidad Cardiovascular (HIIT):** Intervalos de alta intensidad (30 seg sprint / 15 seg descanso) para soportar el ritmo.
+                        3. **Fuerza de hombros y escápulas:** Prensas de hombro con liga de resistencia para mantener el marco (*frame*) firme en las vueltas veloces.
+                        """)
+
+                else: # Quebradita
+                    col1.metric("👟 Zapateado", "2.0 - 2.5 min")
+                    col2.metric("🔥 Exigencia Física", "9.5 / 10")
+                    col3.metric("🎯 Énfasis", "Potencia Pliométrica")
+                    
+                    st.markdown("### 💡 Análisis Coreográfico")
+                    st.write("• **Distribución de Pista:** Requiere **2.0 a 2.5 minutos de zapateado continuo** y brincos (*mbo*), alternando con cargadas/acrobacias.")
+                    st.write("• **Cadencia:** Métrica binaria acelerada de alta intensidad física.")
+                    
+                    with st.expander("🏋️‍♀️ **Ver Rutina de Ejercicios Recomendados para Entrenar**", expanded=True):
+                        st.markdown("""
+                        1. **Pliometría (Potencia de salto):** Salto de caja (*box jumps*) y saltos con sentadilla.
+                        2. **Fortalecimiento de gemelos y tobillos:** Elevaciones de talón para proteger articulaciones en el zapateado.
+                        3. **Fuerza de Tren Inferior:** Sentadillas y desplantes búlgaros para estabilizar rodillas en las caídas acrobáticas.
+                        """)
+
                 st.caption(f"📊 Parámetros Extraídos: {tempo_val} BPM | {secciones_val} Secciones | Clasificador: Random Forest")
 
 st.markdown("---")
