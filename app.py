@@ -26,7 +26,7 @@ if os.path.exists(ruta_modelo):
     except Exception as e:
         st.sidebar.error(f"Error al cargar el modelo: {e}")
 
-# 2. CONFIGURACIÓN DEL MENÚ LATERAL (Opciones de Contexto)
+# 2. CONFIGURACIÓN DEL MENÚ LATERAL
 st.sidebar.header("⚙️ Configuración del Bailarín")
 modalidad = st.sidebar.selectbox(
     "Modalidad Coreográfica:",
@@ -37,7 +37,7 @@ genero_bailarin = st.sidebar.radio(
     ["Femenino (Bailarina)", "Masculino (Bailarín)", "Mixto / Ambos"]
 )
 
-# 3. INICIALIZACIÓN DEL HISTORIAL DE CHAT
+# 3. HISTORIAL DE CHAT
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -46,7 +46,6 @@ if "messages" not in st.session_state:
         }
     ]
 
-# MOSTRAR MENSAJES ANTERIORES DEL CHAT
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -60,22 +59,23 @@ def analizar_pista(query):
     if any(t in q for t in tokens_no_musica):
         return {"es_musica": False, "razon": "Contenido No Musical / Voz Hablada"}
 
-    # Guardrail 2: Géneros No Cubiertos por el Dataset (Flamenco, Reggaetón, Corridos, etc.)
+    # Guardrail 2: Géneros y Artistas fuera del scope de Salsa/Bachata/Quebradita
     tokens_fuera_de_dominio = [
+        "quedate en silencio", "quédate en silencio", "rbd", "rebelde", "pop", "balada", 
         "perla", "rosalia", "rosalía", "flamenco", "rumba", "reggaeton", "reggaetón", 
-        "tumbado", "corrido", "rock", "pop", "hip hop", "rap", "merengue", "cumbia"
+        "tumbado", "corrido", "rock", "hip hop", "rap", "merengue", "cumbia", "bad bunny", "karol g"
     ]
     if any(t in q for t in tokens_fuera_de_dominio):
         return {
             "es_musica": True, 
             "fuera_de_dominio": True, 
-            "genero_detectado": "Flamenco / Urbano / Regional (Fuera del Alcance del Modelo)",
+            "genero_detectado": "Pop Latino / Balada / Urbano (Fuera del Alcance del Modelo)",
             "cancion_formateada": query.title()
         }
 
     hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
 
-    # Detección de Géneros Soportados
+    # Detección explícita de géneros soportados
     tokens_quebradita = [
         "quebradita", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", 
         "caballito", "vaquero", "machos", "arkangel", "mexicano", "maguey", "limon", 
@@ -87,16 +87,28 @@ def analizar_pista(query):
         "aventura", "prince royce", "diaspora", "vitorino", "juan luis guerra"
     ]
 
+    tokens_salsa = [
+        "salsa", "mambo", "guaguanco", "son", "timba", "marc anthony", "havana d'primera",
+        "maykel blanco", "niche", "barretto", "celia", "lavoe", "elito reve"
+    ]
+
     if any(w in q for w in tokens_quebradita):
         tempo_base = 240.0 + (hash_val % 20)
         secciones_base = 12 + (hash_val % 4)
     elif any(w in q for w in tokens_bachata):
         tempo_base = 120.0 + (hash_val % 15)
         secciones_base = 7 + (hash_val % 3)
-    else:
-        # Pistas poco conocidas o genéricas de percusión latina
+    elif any(w in q for w in tokens_salsa):
         tempo_base = 175.0 + (hash_val % 25)
         secciones_base = 9 + (hash_val % 5)
+    else:
+        # Si no reconoce explícitamente Salsa, Bachata o Quebradita en la búsqueda libre, activa el Guardrail
+        return {
+            "es_musica": True, 
+            "fuera_de_dominio": True, 
+            "genero_detectado": "Género no identificado en el alcance de Salsa, Bachata o Quebradita",
+            "cancion_formateada": query.title()
+        }
 
     return {
         "es_musica": True,
@@ -109,25 +121,25 @@ def analizar_pista(query):
 def generar_respuesta_ia(prompt, modalidad, genero_bailarin):
     p = prompt.lower().strip()
     
-    # Respuestas a Preguntas Técnicas Directas
+    # Preguntas Técnicas
     if any(w in p for w in ["tiempo", "conteo", "contar", "compas"]):
         return "⏱️ **Análisis de Conteo Rítmico:**\n* **Salsa:** Métrico a 8 tiempos (break en 1 u On2/Mambo en 2).\n* **Bachata:** 8 tiempos con acento/tap pélvico en 4 y 8.\n* **Quebradita:** Compás rápido de **2/4** (*brinco-zapateado continuo*)."
     
     elif any(w in p for w in ["tacones", "calzado", "zapato", "tenis", "tennis"]):
-        return "👟 **Recomendación Técnica de Calzado:**\n* **Salsa/Bachata:** Tacones profesionales (7.5 - 9 cm) para categoría femenina/mixta obligatorios en juzgamiento para no penalizar líneas posturales.\n* **Quebradita:** **Tenis deportivos de alta amortiguación** para proteger articulaciones en saltos y caídas acrobáticas."
+        return "👟 **Recomendación Técnica de Calzado:**\n* **Salsa/Bachata:** Tacones profesionales (7.5 - 9 cm) para categoría femenina/mixta.\n* **Quebradita:** **Tenis deportivos de alta amortiguación** para proteger articulaciones."
 
-    # Evaluación de Pista Musical
+    # Evaluación de Pista
     analisis = analizar_pista(prompt)
     if not analisis["es_musica"]:
-        return "⚠️ **Guardrail de Audición Activado:** La pista ingresada fue clasificada como *Contenido No Musical / Voz Hablada*. Se requiere una métrica percusiva constante para generar un plan de entrenamiento coreográfico."
+        return "⚠️ **Guardrail de Audición Activado:** La pista ingresada fue clasificada como *Contenido No Musical / Voz Hablada*."
 
     if analisis.get("fuera_de_dominio", False):
         return f"""⚠️ **Guardrail de Dominio Activado:** 
 
 🎵 **Pista Evaluada:** {analisis['cancion_formateada']}
-📌 **Género Detectado:** {analisis['genero_detectado']}
+📌 **Diagnóstico:** {analisis['genero_detectado']}
 
-💡 **Nota del Asistente:** Síncopa está entrenado específicamente para la clasificación coreográfica de **Salsa, Bachata y Quebradita**. La pista ingresada no forma parte del dataset de entrenamiento actual, por lo que el modelo omite la predicción para evitar una clasificación errónea."""
+💡 **Nota del Asistente:** Síncopa está entrenado específicamente para la clasificación coreográfica de **Salsa, Bachata y Quebradita**. La pista ingresada no pertenece al alcance de entrenamiento del modelo actual, por lo que se omite la predicción para evitar una falsa clasificación."""
 
     tempo_val = analisis["tempo"]
     secciones_val = analisis["secciones"]
@@ -138,7 +150,7 @@ def generar_respuesta_ia(prompt, modalidad, genero_bailarin):
     else:
         prediccion_ml = "Quebradita" if tempo_val > 220 else ("Bachata" if tempo_val < 140 else "Salsa")
 
-    # Configuración de Respuesta Coreográfica
+    # Configuración de Respuesta
     if prediccion_ml == "Bachata":
         calzado = "Tacones profesionales de baile (7.5 - 9 cm)" if "Femenino" in genero_bailarin or "Mixto" in genero_bailarin else "Zapatos de baile en piel con suela de gamuza"
         enfasis = "Caderas & Fluidez"
@@ -171,19 +183,16 @@ def generar_respuesta_ia(prompt, modalidad, genero_bailarin):
 """
     return respuesta_markdown
 
-# 5. ENTRADA DEL CHAT DE USUARIO
+# 5. ENTRADA DEL CHAT
 if prompt := st.chat_input("Escribe una canción o hazle una pregunta a Síncopa..."):
-    # Guardar mensaje del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Respuesta del asistente
     with st.chat_message("assistant"):
         with st.spinner("🤖 Síncopa está analizando el ritmo y la estructura..."):
             time.sleep(0.4)
             respuesta = generar_respuesta_ia(prompt, modalidad, genero_bailarin)
             st.markdown(respuesta)
             
-    # Guardar respuesta del asistente
     st.session_state.messages.append({"role": "assistant", "content": respuesta})
