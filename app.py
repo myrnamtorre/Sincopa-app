@@ -203,7 +203,7 @@ if prompt := st.chat_input("Escribe tu duda, pregunta por footwork o ingresa otr
             else:
                 respuesta_seguimiento = f"👟 **Footwork / Zapateado en '{cancion_nombre}' (Quebradita):**\n\n¡Definitivamente! El footwork aquí es **Zapateado continuo y brincos alternados**, combinados con remates al compás."
 
-        # A3: Recomendaciones de canciones o sugerencias de género
+        # A3: Recomendaciones de canciones o sugerencias de género (con actualización dinámica de modalidad)
         elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones"]):
             gen_buscado = genero
             if "salsa" in p_lower:
@@ -213,9 +213,17 @@ if prompt := st.chat_input("Escribe tu duda, pregunta por footwork o ingresa otr
             elif "quebradita" in p_lower or "banda" in p_lower:
                 gen_buscado = "Quebradita"
 
+            mod_actual = eval_act['modalidad']
+            if "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower or "mixto" in p_lower:
+                mod_actual = "Grupo / Compañía"
+            elif "solista" in p_lower or "individual" in p_lower:
+                mod_actual = "Solista / Individual"
+            elif "pareja" in p_lower:
+                mod_actual = "Pareja"
+
             sug = SUGERENCIAS_GENERO.get(gen_buscado, [])
             items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug])
-            respuesta_seguimiento = f"🎶 **Sugerencias de {gen_buscado} (ideales para {eval_act['modalidad']}):**\n\nAquí tienes excelentes opciones con buena métrica y cadencia:\n\n{items_txt}"
+            respuesta_seguimiento = f"🎶 **Sugerencias de {gen_buscado} (ideales para {mod_actual}):**\n\nAquí tienes excelentes opciones con buena métrica y cadencia:\n\n{items_txt}"
 
         # A4: Exigencia física o métricas
         elif any(w in p_lower for w in ["exigencia", "fisica", "física", "esfuerzo", "puntuacion", "puntuación", "métrica"]):
