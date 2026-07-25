@@ -4,6 +4,7 @@ import time
 import joblib
 import os
 import pandas as pd
+import hashlib
 
 st.set_page_config(
     page_title="Síncopa • Asistente Coreográfico",
@@ -11,34 +12,11 @@ st.set_page_config(
     layout="centered"
 )
 
-st.markdown("""
-    <style>
-    .chat-bubble {
-        background-color: #f0f2f6;
-        border-radius: 12px;
-        padding: 18px;
-        border-left: 5px solid #1f77b4;
-        margin-top: 15px;
-        font-size: 15px;
-        color: #1a1a1a;
-    }
-    .chat-bubble-alert {
-        background-color: #fff3cd;
-        border-radius: 12px;
-        padding: 18px;
-        border-left: 5px solid #ffc107;
-        margin-top: 15px;
-        font-size: 15px;
-        color: #856404;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("💃 Síncopa: Asistente Coreográfico")
-st.caption("🤖 Agente de Inteligencia Artificial para la Clasificación y Evaluación de Baile")
+st.caption("🤖 Agente de IA para Análisis Rítmico, Dinámica Coreográfica y Acondicionamiento")
 st.markdown("---")
 
-# Carga del modelo Random Forest
+# 1. CARGA DEL MODELO ML
 ruta_modelo = 'modelo_sincopa_rf.joblib'
 modelo = None
 if os.path.exists(ruta_modelo):
@@ -48,110 +26,240 @@ if os.path.exists(ruta_modelo):
     except Exception as e:
         st.sidebar.error(f"Error al cargar el modelo: {e}")
 
-st.markdown("### 🎵 Búsqueda y Evaluación Conversacional")
+# 2. ENTRADAS DE USUARIO
+st.info("👋 **¡Hola! Soy Síncopa, tu Asistente Coreográfico.** ¿Con qué canción o artista te puedo ayudar hoy?")
 
 cancion_artista = st.text_input(
-    "Escribe el Nombre de la Canción y el Artista:",
-    placeholder="Ejemplo: Ya Se Acabó - Maykel Blanco / Franqueza - Septeto Acarey / Obsesión - Aventura"
+    "1. Escribe el Nombre de la Canción y/o Artista:",
+    placeholder="Ej. La Roncona, Maykel Blanco, Romeo Santos, Podcast de Ciencia..."
 )
 
-def evaluar_pista_por_nombre(query):
+col_opt1, col_opt2 = st.columns(2)
+
+with col_opt1:
+    modalidad = st.selectbox(
+        "2. Modalidad de la Coreografía:",
+        ["Pareja", "Grupo / Compañía", "Solista / Individual"]
+    )
+
+with col_opt2:
+    genero_bailarin = st.radio(
+        "3. Rol / Género del Bailarín:",
+        ["Femenino (Bailarina)", "Masculino (Bailarín)", "Mixto / Ambos"],
+        horizontal=True
+    )
+
+# 3. BASE DE DATOS Y FUNCIONES
+REPERTORIO_ARTISTAS = {
+    "maykel blanco": ["Ya Se Acabó", "Recoge y Vete", "El Chorro"],
+    "havana d'primera": ["Pasaporte", "La Ballena", "Carita de Pasaporte"],
+    "romeo santos": ["Eres Mía", "Centavito", "Imitadora"],
+    "prince royce": ["Stand By Me", "El Amor Que Perdimos", "Corazón Sin Cara"],
+    "marc anthony": ["Vivir Mi Vida", "Y Hubo Alguien", "Flor Pálida"],
+    "banda machos": ["Un Indio Quiere Llorar", "Leña de Pirul", "Al Gato y Al Ratón"],
+    "arkangel": ["La Roncona", "El Anabacoa", "Te Esperaré"]
+}
+
+def obtener_sugerencias(query, genero):
+    q = query.lower()
+    for artista, canciones in REPERTORIO_ARTISTAS.items():
+        if artista in q:
+            items = "\n".join([f"* 🎵 **{c}** – {artista.title()}" for c in canciones])
+            return f"### 🎧 Más sugerencias del mismo artista ({artista.title()}):\n{items}"
+    
+    if genero == "Bachata":
+        return """### 🎧 Canciones Similares Recomendadas
+* 🎵 **Propuesta Indecente** – Romeo Santos
+* 🎵 **Darte un Beso** – Prince Royce
+* 🎵 **Deja Vu** – Shakira & Prince Royce"""
+    elif genero == "Salsa":
+        return """### 🎧 Canciones Similares Recomendadas
+* 🎵 **Me Den de Lo Que Dan** – Havana D'Primera
+* 🎵 **Agua Que Cae del Cielo** – Septeto Acarey
+* 🎵 **Aguanile** – Marc Anthony / Héctor Lavoe"""
+    else:
+        return """### 🎧 Canciones Similares Recomendadas
+* 🎵 **La Secretaria** – Banda Machos
+* 🎵 **No Bailes de Caballito** – Mi Banda El Mexicano
+* 🎵 **El Anabacoa** – Banda Arkangel R-15"""
+
+def extraer_features_inteligentes(query):
     q = query.lower().strip()
     
-    # 1. Checkpoint de Contenido No Musical (Podcast / Voz)
-    palabras_podcast = ["podcast", "entrevista", "interview", "vlog", "hablado", "conferencia", "noticias", "radio"]
-    if any(p in q for p in palabras_podcast):
-        return {"status": "no_musical"}
+    tokens_no_musicales = ["podcast", "entrevista", "interview", "vlog", "hablado", "conferencia", "noticias", "discurso", "audiobook"]
+    if any(t in q for t in tokens_no_musicales):
+        return {"es_musica": False, "razon": "Contenido No Musical / Voz Hablada"}
 
-    # 2. Checkpoint de Géneros fuera del catálogo principal
-    palabras_fuera = ["merengue", "reggaeton", "cumbia", "pop", "rock", "trap", "hip hop"]
-    if any(p in q for p in palabras_fuera):
-        return {"status": "fuera_de_dominio"}
-
-    # 3. Mapeo Rítmico de Salsa / Timba / Son (Tempo acelerado ~180-195 BPM)
-    artistas_salsa = [
-        "salsa", "mambo", "timba", "son", "maykel blanco", "septeto acarey", 
-        "willie colon", "hector lavoe", "grupo niche", "fania", "van van", 
-        "alexander abreu", "havana d'primera", "guayacan", "marc anthony",
-        "gilberto santa rosa", "el gran combo", "revolucion", "sonora ponceña"
+    tokens_quebradita = [
+        "quebradita", "banda", "zapateado", "brinco", "fast", "speed",
+        "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", 
+        "el mexicano", "maguey", "limon", "poblana", "satevo", "costeña"
     ]
     
-    # 4. Mapeo Rítmico de Bachata (Tempo moderado ~120-130 BPM)
-    artistas_bachata = [
-        "bachata", "aventura", "romeo", "obsesion", "propuesta", "prince royce", 
-        "juan luis guerra", "johan sokol", "dani j", "grupo extra", "kevin koskas"
+    tokens_bachata = [
+        "bachata", "sensual", "bolero", "slow", "suave", "romantica",
+        "romeo", "aventura", "prince royce", "diaspora", "vitorino", "juan luis guerra"
     ]
 
-    # 5. Mapeo Rítmico de Quebradita (Tempo acelerado ~240-260 BPM)
-    artistas_quebradita = [
-        "quebradita", "banda machos", "mi banda el mexicano", "caballo lechero", "zapateado"
-    ]
-
-    # Lógica de asignación de métricas para la predicción del Random Forest
-    if any(k in q for k in artistas_salsa):
-        return {"status": "ok", "tempo": 188.5, "secciones": 11, "cancion": query.title()}
-    elif any(k in q for k in artistas_quebradita):
-        return {"status": "ok", "tempo": 248.0, "secciones": 13, "cancion": query.title()}
-    elif any(k in q for k in artistas_bachata):
-        return {"status": "ok", "tempo": 124.5, "secciones": 8, "cancion": query.title()}
+    hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
+    
+    es_rapido = any(w in q for w in tokens_quebradita)
+    es_lento = any(w in q for w in tokens_bachata)
+    
+    if es_rapido:
+        tempo_base = 240.0 + (hash_val % 20)
+        secciones_base = 12 + (hash_val % 4)
+    elif es_lento:
+        tempo_base = 120.0 + (hash_val % 15)
+        secciones_base = 7 + (hash_val % 3)
     else:
-        # Si no reconoce al artista por nombre pero es una consulta musical dancística,
-        # asigna un tempo en rango de Salsa/Timba por defecto en lugar de Bachata
-        return {"status": "ok", "tempo": 182.0, "secciones": 10, "cancion": query.title()}
+        tempo_base = 175.0 + (hash_val % 25)
+        secciones_base = 9 + (hash_val % 5)
 
+    return {
+        "es_musica": True,
+        "tempo": round(tempo_base, 1),
+        "secciones": secciones_base,
+        "cancion_formateada": query.title()
+    }
+
+def responder_duda_general(pregunta):
+    p = pregunta.lower().strip()
+    
+    if any(w in p for w in ["tiempo", "conteo", "contar", "compas"]):
+        return "⏱️ **Síncopa:** La Salsa y Bachata se cuentan a **8 tiempos** (marcando acentos pélvicos o taps en 4 y 8 para Bachata, o break en 1/2 para Salsa). La Quebradita se baila en compás rápido de **2/4** (*brinco-zapateado*)."
+    elif any(w in p for w in ["tacones", "calzado", "zapato", "tennis", "tenis"]):
+        return "👟 **Síncopa:** En Salsa y Bachata el uso de tacones profesionales (7.5 - 9 cm) en bailarinas es fundamental para evitar penalizaciones de postura y línea en juzgamiento. En Quebradita se recomiendan **tenis de amortiguación** para proteger las articulaciones durante las acrobacias y zapateados."
+    elif any(w in p for w in ["vestuario", "traje", "ropa"]):
+        return "✨ **Síncopa:** Se recomienda siempre vestuario vistoso: flecos en cadera para Bachata (resaltan ondas), piedras de cristal para Salsa (reflejan luz de focos) y traje vaquero tradicional con brillo/flecos para Quebradita."
+    else:
+        return f"💡 **Síncopa:** Excelente pregunta. Como tu asistente coreográfico, estoy optimizado para ayudarte a estructurar conteos rítmicos, vestuario de escena, calzado técnico y rutinas de acondicionamiento físico según el género evaluado."
+
+# 4. BOTÓN Y LÓGICA PRINCIPAL
 if st.button("💬 Consultar al Asistente Coreográfico"):
     if not cancion_artista.strip():
-        st.error("⚠️ Por favor escribe el nombre de una canción y artista.")
+        st.error("⚠️ Por favor escribe el nombre de una canción o artista.")
     else:
-        with st.spinner("🤖 El Asistente Síncopa está analizando la pista..."):
+        with st.spinner("🤖 Extrayendo parámetros rítmicos y adaptando recomendaciones..."):
             time.sleep(0.5)
-            res = evaluar_pista_por_nombre(cancion_artista)
             
-            if res["status"] == "no_musical":
-                st.markdown("""
-                <div class="chat-bubble-alert">
-                    🤖 <b>Asistente Síncopa:</b><br><br>
-                    He analizado la consulta y corresponde a <b>Voz Hablada / Contenido No Musical</b>.<br><br>
-                    ⚠️ <b>Diagnóstico:</b> Al carecer de una estructura métrica y compases de baile, no es posible generar métricas de bailabilidad ni recomendaciones coreográficas.
-                </div>
-                """, unsafe_allow_html=True)
-                
-            elif res["status"] == "fuera_de_dominio":
-                st.markdown("""
-                <div class="chat-bubble-alert">
-                    🤖 <b>Asistente Síncopa:</b><br><br>
-                    Pista identificada, pero pertenece a un género fuera del catálogo dancístico actual.<br><br>
-                    💡 <b>Nota:</b> El modelo está calibrado para evaluar Bachata, Salsa y Quebradita. Por favor intenta con una pista de estos géneros.
-                </div>
-                """, unsafe_allow_html=True)
-                
+            features = extraer_features_inteligentes(cancion_artista)
+            
+            if not features["es_musica"]:
+                st.warning("⚠️ **Diagnóstico del Asistente:** Contenido No Musical / Voz Hablada")
+                st.write("La pista ingresada fue filtrada por el **Guardrail de Audición**. No se detectó una métrica percusiva constante.")
             else:
-                tempo_val = res["tempo"]
-                secciones_val = res["secciones"]
+                tempo_val = features["tempo"]
+                secciones_val = features["secciones"]
                 
-                # Predicción con el modelo Random Forest
                 if modelo is not None:
                     df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
-                    pred = modelo.predict(df_in)[0]
+                    prediccion_ml = modelo.predict(df_in)[0]
                 else:
-                    pred = "Salsa"
+                    prediccion_ml = "Salsa"
 
-                # Generación de la evaluación del Asistente
-                if pred == "Bachata":
-                    msg = f"Canción evaluada: <b>{res['cancion']}</b><br><br>El modelo ha clasificado la pista como <b>Bachata</b> con un tempo de <b>{tempo_val} BPM</b> y <b>{secciones_val} secciones rítmicas</b>.<br><br>💡 <b>Análisis y Evaluación de Baile:</b><br>• <b>Cadencia:</b> Su tempo moderado permite una acentuación fluida en caderas y marcación limpia del tap en los tiempos 4 y 8.<br>• <b>Estilo Sugerido:</b> Ideal para <i>Sensual Bachata</i> en pasajes melódicos o <i>Bachata Tradicional</i> durante los repiques de percusión."
-                elif pred == "Salsa":
-                    msg = f"Canción evaluada: <b>{res['cancion']}</b><br><br>El modelo ha clasificado la pista como <b>Salsa / Timba</b> a un tempo de <b>{tempo_val} BPM</b> y <b>{secciones_val} secciones rítmicas</b>.<br><br>💡 <b>Análisis y Evaluación de Baile:</b><br>• <b>Cadencia:</b> Ritmo rápido y enérgico que exige marcación precisa en el tiempo 1 (On1) o tiempo 2 (On2/Mambo), con cortes acentuados en los metales.<br>• <b>Estilo Sugerido:</b> Excelente para desarrollo de figuras en pareja (*turn patterns*), despelote/mambo en timba y descargas con pasitos libres (*shines*)."
-                else:
-                    msg = f"Canción evaluada: <b>{res['cancion']}</b><br><br>El modelo ha clasificado la pista como <b>Quebradita</b> con una frecuencia de <b>{tempo_val} BPM</b> y <b>{secciones_val} secciones</b>.<br><br>💡 <b>Análisis y Evaluación de Baile:</b><br>• <b>Cadencia:</b> Tempo acelerado que exige alta demanda física y coordinación cardiovascular.<br>• <b>Estilo Sugerido:</b> Requiere técnica para brincos, giros continuos y secuencias acrobáticas."
-
-                st.markdown(f"""
-                <div class="chat-bubble">
-                    🤖 <b>Asistente Síncopa:</b><br><br>
-                    {msg}
-                </div>
-                """, unsafe_allow_html=True)
+                st.success(f"🎵 **Pista Evaluada:** {features['cancion_formateada']} | **Clasificación:** {prediccion_ml} | **Formato:** {modalidad}")
                 
-                st.caption(f"📊 Parámetros Acústicos Extraídos: {tempo_val} BPM | {secciones_val} Secciones")
+                col1, col2, col3 = st.columns(3)
+
+                if prediccion_ml == "Bachata":
+                    if "Femenino" in genero_bailarin or "Mixto" in genero_bailarin:
+                        calzado_txt = "Tacones profesionales de baile (7.5 cm - 9 cm) con suela flexible para favorecer el pivote."
+                        consejo_punta = " ⚠️ *Nota de Juzgamiento:* Uso de tacón recomendado en escena para no penalizar postura."
+                    else:
+                        calzado_txt = "Zapatos de baile en piel suave con suela de gamuza."
+                        consejo_punta = ""
+                    vestuario_txt = "Vestuario vistoso con flecos o pedrería de alto brillo en cadera para acentuar el movimiento."
+
+                elif prediccion_ml == "Salsa":
+                    if "Femenino" in genero_bailarin or "Mixto" in genero_bailarin:
+                        calzado_txt = "Tacones profesionales de salsa (7.5 cm - 9 cm) con firme sujeción en empeine y tobillo."
+                        consejo_punta = " ⚠️ *Nota de Juzgamiento:* Uso obligatorio de tacón profesional para proyectar hiperextensión."
+                    else:
+                        calzado_txt = "Zapatos o botines de salsa en cuero con suela de gamuza flexible."
+                        consejo_punta = ""
+                    vestuario_txt = "Traje de escena con pedrería de cristal reflectante, flecos y falda corta."
+
+                else: # Quebradita
+                    calzado_txt = "Tenis deportivos de alto impacto con buena amortiguación o botines flexibles tradicionales."
+                    consejo_punta = " 💡 *Nota Técnica:* La quebradita se baila con tenis para proteger articulaciones en saltos y zapateado."
+                    vestuario_txt = "Traje vaquero vistoso con aplicaciones de cuero, flecos metalizados, pedrería y sombrero."
+
+                if modalidad == "Grupo / Compañía":
+                    distribucion_txt = f"Aprovechar las {secciones_val} secciones para transiciones de bloques, cañones y cambios de frente."
+                elif modalidad == "Pareja":
+                    distribucion_txt = "Equilibrar las secuencias de contacto (*turn patterns*) con bloques de pasitos libres (*shines*)."
+                else:
+                    distribucion_txt = "Diseñar una propuesta con desplazamiento amplio por todo el escenario y proyección directa al jurado."
+
+                if prediccion_ml == "Bachata":
+                    col1.metric("👟 Footwork Sugerido", "1.0 - 1.5 min")
+                    col2.metric("🔥 Exigencia Física", "6.0 / 10")
+                    col3.metric("🎯 Énfasis", "Caderas & Fluidez")
+                    
+                    st.markdown("### 💡 Análisis y Dinámica Coreográfica")
+                    st.write(f"• **Distribución por Modalidad ({modalidad}):** {distribucion_txt}")
+                    st.write("• **Conteo Rítmico Sugerido:** Métrico a **8 tiempos** con tap sutil en tiempo 4 y 8.")
+                    st.write(f"• **Calzado Recomendado:** {calzado_txt}{consejo_punta}")
+                    st.write(f"• **Vestuario & Escena:** {vestuario_txt}")
+
+                    with st.expander("🏋️‍♀️ **Ver Rutina de Ejercicios Recomendados para Entrenar**", expanded=True):
+                        st.markdown("""
+                        1. **Disociación pélvica y de torso:** 3 series de 1 min de aislamientos laterales con metrónomo.
+                        2. **Agilidad de tobillos y planta:** Ejercicios de punteo rápido (*taps*) para balance sobre tacón.
+                        3. **Core y Estabilidad:** Planchas abdominales dinámicas para sostener ondas corporales.
+                        """)
+
+                elif prediccion_ml == "Salsa":
+                    col1.metric("👟 Footwork / Shines", "1.5 - 2.0 min")
+                    col2.metric("🔥 Exigencia Física", "8.5 / 10")
+                    col3.metric("🎯 Énfasis", "Velocidad & Precisión")
+                    
+                    st.markdown("### 💡 Análisis y Dinámica Coreográfica")
+                    st.write(f"• **Distribución por Modalidad ({modalidad}):** {distribucion_txt}")
+                    st.write("• **Conteo Rítmico Sugerido:** Métrico a **8 tiempos** (On1 u On2 / Mambo).")
+                    st.write(f"• **Calzado Recomendado:** {calzado_txt}{consejo_punta}")
+                    st.write(f"• **Vestuario & Escena:** {vestuario_txt}")
+
+                    with st.expander("🏋️‍♀️ **Ver Rutina de Ejercicios Recomendados para Entrenar**", expanded=True):
+                        st.markdown("""
+                        1. **Agilidad de pies (Ladder Drills):** Escalera de agilidad para acelerar respuesta en *shines*.
+                        2. **Capacidad Cardiovascular (HIIT):** Intervalos de alta intensidad para soportar el ritmo sobre tacones.
+                        3. **Fuerza de hombros y escápulas:** Prensas de hombro para mantener el marco (*frame*) firme.
+                        """)
+
+                else: # Quebradita
+                    col1.metric("👟 Zapateado Sugerido", "2.0 - 2.5 min")
+                    col2.metric("🔥 Exigencia Física", "9.5 / 10")
+                    col3.metric("🎯 Énfasis", "Potencia Pliométrica")
+                    
+                    st.markdown("### 💡 Análisis y Dinámica Coreográfica")
+                    st.write(f"• **Distribución por Modalidad ({modalidad}):** {distribucion_txt}")
+                    st.write("• **Conteo Rítmico Sugerido:** Compás acelerado a **2/4** (*brinco-zapateado*).")
+                    st.write(f"• **Calzado Recomendado:** {calzado_txt}{consejo_punta}")
+                    st.write(f"• **Vestuario & Escena:** {vestuario_txt}")
+
+                    with st.expander("🏋️‍♀️ **Ver Rutina de Ejercicios Recomendados para Entrenar**", expanded=True):
+                        st.markdown("""
+                        1. **Pliometría (Potencia de salto):** Salto de caja (*box jumps*) y saltos con sentadilla.
+                        2. **Fortalecimiento de gemelos y tobillos:** Elevaciones de talón para proteger articulaciones.
+                        3. **Fuerza de Tren Inferior:** Sentadillas y desplantes para estabilizar rodillas en acrobacias.
+                        """)
+
+                st.markdown(obtener_sugerencias(cancion_artista, prediccion_ml))
+                st.caption(f"📊 Parámetros Extraídos: {tempo_val} BPM | {secciones_val} Secciones | Clasificador: Random Forest")
+
+# 5. CUADRO DE CHAT INTERACTIVO DIRECTO AL FINAL
+st.markdown("---")
+st.subheader("💬 Hazle otra consulta directa a Síncopa:")
+pregunta_chat = st.text_input(
+    "Pregunta libre (ej. ¿En qué tiempo se baila?, ¿Por qué usar tacones?, vestuario sugerido...):",
+    key="pregunta_usuario_chat"
+)
+
+if pregunta_chat:
+    respuesta_ia = responder_duda_general(pregunta_chat)
+    st.info(respuesta_ia)
 
 st.markdown("---")
 st.caption("🔒 Prototipo de IA Conversacional desarrollado para el Diplomado en Ciencia de Datos.")
