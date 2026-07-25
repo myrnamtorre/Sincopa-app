@@ -5,6 +5,7 @@ import joblib
 import os
 import pandas as pd
 import hashlib
+import google.generativeai as genai
 
 st.set_page_config(
     page_title="Síncopa • Asistente Coreográfico IA",
@@ -16,7 +17,22 @@ st.title("💃 Síncopa: Asistente Coreográfico IA")
 st.caption("🤖 Agente Conversacional para Análisis Coreográfico, Ritmo y Entrenamiento")
 st.markdown("---")
 
-# 1. CARGA DEL MODELO ML
+# 1. CONFIGURACIÓN DE GEMINI API (LLM)
+# Puedes colocar tu API Key en la barra lateral o en las variables de entorno / st.secrets
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+if not GEMINI_KEY:
+    with st.sidebar:
+        GEMINI_KEY = st.text_input("🔑 Ingrese Gemini API Key:", type="password")
+
+if GEMINI_KEY:
+    genai.configure(api_key=GEMINI_KEY)
+    llm_model = genai.GenerativeModel("gemini-1.5-flash")
+else:
+    llm_model = None
+    st.sidebar.warning("⚠️ Sin API Key de Gemini: La app usará respuestas estáticas de fallback.")
+
+# 2. CARGA DEL MODELO ML LOCAL
 ruta_modelo = 'modelo_sincopa_rf.joblib'
 modelo = None
 if os.path.exists(ruta_modelo):
@@ -26,35 +42,16 @@ if os.path.exists(ruta_modelo):
     except Exception as e:
         st.sidebar.error(f"Error al cargar el modelo: {e}")
 
-# 2. BASE DE DATOS DE SUGERENCIAS SIMILARES
+# 3. BASE DE DATOS Y ESTADOS
 SUGERENCIAS_GENERO = {
-    "Quebradita": [
-        "La Culebra - Banda Machos",
-        "La Roncona - Banda Arkangel R-15",
-        "El Apagón - Banda Yuri",
-        "El Baile del Caballito - Banda Machos"
-    ],
-    "Salsa": [
-        "Aguanile - Héctor Lavoe",
-        "Valió la Pena - Marc Anthony",
-        "Lluvia - Eddie Santiago",
-        "La Rebelión - Joe Arroyo"
-    ],
-    "Bachata": [
-        "Propuesta Indecente - Romeo Santos",
-        "Dile al Amor - Aventura",
-        "Darte un Beso - Prince Royce",
-        "Burbujas de Amor - Juan Luis Guerra"
-    ]
+    "Quebradita": ["La Culebra - Banda Machos", "La Roncona - Banda Arkangel R-15", "El Apagón - Banda Yuri"],
+    "Salsa": ["Aguanile - Héctor Lavoe", "Valió la Pena - Marc Anthony", "Lluvia - Eddie Santiago"],
+    "Bachata": ["Propuesta Indecente - Romeo Santos", "Dile al Amor - Aventura", "Darte un Beso - Prince Royce"]
 }
 
-# 3. INICIALIZACIÓN DE ESTADOS DE SESIÓN
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": "👋 **¡Hola! Soy Síncopa, tu Asistente Coreográfico.**\n\n¿Qué canción o artista te gustaría analizar hoy?"
-        }
+        {"role": "assistant", "content": "👋 **¡Hola! Soy Síncopa, tu Asistente Coreográfico.**\n\n¿Qué canción o artista te gustaría analizar hoy?"}
     ]
 
 if "step" not in st.session_state:
@@ -73,7 +70,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 4. FUNCIONES COREOGRÁFICAS
+# 4. FUNCIONES DE EXTRACCIÓN Y LÓGICA
 def analizar_pista(query):
     q = query.lower().strip()
     
@@ -174,42 +171,42 @@ if prompt := st.chat_input("Escribe tu duda, pregunta por footwork o ingresa otr
         st.markdown(prompt)
 
     p_lower = prompt.lower()
-
-    # Comprobar si el usuario quiere iniciar la evaluación de una canción totalmente nueva
     pide_nueva_cancion = any(w in p_lower for w in ["evaluar otra", "nueva canción", "otra canción", "analizar otra", "cambiar de canción", "reset"])
 
-    # --- CASO A: EL USUARIO YA TIENE UNA CANCIÓN EVALUADA Y HACE UNA PREGUNTA DE SEGUIMIENTO ---
+    # --- CASO A: CONVERSACIÓN INTELIGENTE SOBRE LA CANCIÓN ACTUAL (LLM GENERATIVE) ---
     if st.session_state.step == "evaluado" and not pide_nueva_cancion:
         eval_act = st.session_state.ultima_evaluacion
-        genero = eval_act["genero"]
-        cancion_nombre = eval_act["cancion"]
+        
+        if llm_model is not None:
+            with st.chat_message("assistant"):
+                with st.spinner("🤖 Síncopa está pensando..."):
+                    # Construimos un System Prompt dinámico para que el LLM responda como Síncopa
+                    system_prompt = f"""
+Eres 'Síncopa', un experto asistente e instructor de baile profesional especialista en Salsa, Bachata y Quebradita.
+Actualmente estás conversando sobre la siguiente pista evaluada por el modelo de Machine Learning:
 
-        # 1. Dudas de Footwork / Paso Básico / Shines
-        if any(w in p_lower for w in ["footwork", "pasos", "shines", "zapateado", "pies", "brincos"]):
-            if genero == "Salsa":
-                respuesta_seguimiento = f"👟 **Footwork en '{cancion_nombre}' (Salsa):**\n\n¡Absolutamente! Con un tempo de ~{eval_act['tempo']} BPM, esta pista es ideal para incluir **Shines / Footwork rápido** en los cortes de mambo o descargas. Te recomiendo incorporar marcaciones sincopadas, susy q, y pasadas de pie a tiempo y a contratiempo."
-            elif genero == "Bachata":
-                respuesta_seguimiento = f"👟 **Footwork en '{cancion_nombre}' (Bachata):**\n\n¡Por supuesto! En Bachata el footwork (o paso básico sincopado) se luce en los cortes instrumentales de requinto. Puedes integrar *sincopados en 1 y 2*, *doble tap*, y desplazamientos laterales con disociación de cadencia."
-            else: # Quebradita
-                respuesta_seguimiento = f"👟 **Footwork / Zapateado en '{cancion_nombre}' (Quebradita):**\n\n¡Definitivamente! El footwork aquí se traduce en **Zapateado continuo y brincos alternados**. Es el corazón de la pieza junto con las acrobacias."
+- Canción: {eval_act['cancion']}
+- Género clasificado por ML: {eval_act['genero']}
+- Tempo / BPM: ~{eval_act['tempo']} BPM
+- Formato: {eval_act['modalidad']}
+- Exigencia Física: {eval_act['metricas']['esfuerzo']}/10
+- Enfoque: {eval_act['metricas']['enfasis']}
 
-        # 2. Dudas sobre Recomendaciones Similares
-        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "opciones", "mismo estilo"]):
-            sug = SUGERENCIAS_GENERO.get(genero, [])
-            items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug])
-            respuesta_seguimiento = f"🎶 **Canciones Similares a '{cancion_nombre}' ({genero}):**\n\nAquí tienes pistas con métricas y cadencia similares:\n\n{items_txt}"
-
-        # 3. Dudas sobre Exigencia / Métricas
-        elif any(w in p_lower for w in ["exigencia", "fisica", "física", "esfuerzo", "puntuacion", "puntuación", "métrica"]):
-            respuesta_seguimiento = f"📊 **Exigencia Física de '{cancion_nombre}':**\n\n* **Nivel:** **{eval_act['metricas']['esfuerzo']} / 10** {eval_act['metricas']['mod_nota']}\n* **Velocidad:** {eval_act['metricas']['velocidad']}\n* **Formato:** {eval_act['modalidad']}"
-
-        # 4. Respuesta conversacional general manteniendo la memoria
+Instrucciones:
+1. Responde a la pregunta del usuario con naturalidad, empatía y conocimiento técnico real de danza.
+2. Si preguntan por tiempos, minutos de footwork, técnicas o variaciones, calcula o estima lógicamente según la duración típica de una pieza (3-4 mins) y su tempo ({eval_act['tempo']} BPM). Por ejemplo, en una salsa de 3 mins a {eval_act['tempo']} BPM, suele haber entre 45 segundos y 1.5 minutos de descargas/mambo ideales para footwork/shines.
+3. Sé conciso pero servicial. Usa emojis y formato claro de Markdown.
+"""
+                    prompt_completo = f"{system_prompt}\n\nPregunta del usuario: {prompt}"
+                    response = llm_model.generate_content(prompt_completo)
+                    respuesta_txt = response.text
         else:
-            respuesta_seguimiento = f"💡 **Síncopa:** Sobre **'{cancion_nombre}'** ({genero}): Puedes adaptar la rutina agregando elementos técnicos como footwork, variaciones de marco en pareja o aceleraciones en las secciones percusivas.\n\n*Si quieres evaluar una pista diferente, dime 'analizar otra canción'.*"
+            # Fallback dinámico simple si no hay API key de Gemini
+            respuesta_txt = f"💡 En una pieza de **{eval_act['genero']}** como *'{eval_act['cancion']}'* (~{eval_act['tempo']} BPM), la sección de descargas o cortes suele durar entre **45 segundos y 1.5 minutos**. Ese es el tiempo óptimo para lucir el footwork o shines sin agotar a los bailarines."
 
-        st.session_state.messages.append({"role": "assistant", "content": respuesta_seguimiento})
+        st.session_state.messages.append({"role": "assistant", "content": respuesta_txt})
         with st.chat_message("assistant"):
-            st.markdown(respuesta_seguimiento)
+            st.markdown(respuesta_txt)
 
     # --- CASO B: PREGUNTAS TÉCNICAS GENERALES FUERA DE EVALUACIÓN ---
     elif any(w in p_lower for w in ["tiempo", "conteo", "tacones", "calzado"]) and len(prompt.split()) > 3 and st.session_state.step == "esperando_cancion":
@@ -277,7 +274,7 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
         with st.chat_message("assistant"):
             st.markdown(bot_reply)
 
-    # --- CASO E: PASO 3 - REPORTE FINAL Y PASO A ESTADO "EVALUADO" ---
+    # --- CASO E: PASO 3 - REPORTE FINAL ---
     elif st.session_state.step == "esperando_rol":
         rol_user = prompt
         analisis = st.session_state.analisis_pista
@@ -298,7 +295,6 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
 
                 metricas = calcular_esfuerzo_y_metricas(prediccion_ml, modalidad_txt)
 
-                # GUARDAR EVALUACIÓN Y CAMBIAR ESTADO A "evaluado"
                 st.session_state.ultima_evaluacion = {
                     "cancion": analisis['cancion_formateada'],
                     "genero": prediccion_ml,
@@ -350,7 +346,7 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
 Aquí tienes algunas pistas recomendadas dentro del mismo género:
 {sug_txt}
 
-*(Puedes hacer preguntas de seguimiento sobre esta canción, como pedir footwork, recomendaciones o consultar otra canción)*
+*(Puedes hacerme cualquier pregunta libre sobre esta canción, minutos de footwork, variaciones de pasos o pedir otra canción)*
 """
                 st.markdown(respuesta)
                 st.session_state.messages.append({"role": "assistant", "content": respuesta})
