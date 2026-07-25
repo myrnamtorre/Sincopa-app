@@ -26,7 +26,29 @@ if os.path.exists(ruta_modelo):
     except Exception as e:
         st.sidebar.error(f"Error al cargar el modelo: {e}")
 
-# 2. INICIALIZACIÓN DE ESTADOS DE SESIÓN
+# 2. BASE DE DATOS DE SUGERENCIAS SIMILARES POR GÉNERO
+SUGERENCIAS_GENERO = {
+    "Quebradita": [
+        "La Culebra - Banda Machos",
+        "La Roncona - Banda Arkangel R-15",
+        "El Apagón - Banda Yuri",
+        "El Baile del Caballito - Banda Machos"
+    ],
+    "Salsa": [
+        "Aguanile - Héctor Lavoe",
+        "Valió la Pena - Marc Anthony",
+        "Lluvia - Eddie Santiago",
+        "La Rebelión - Joe Arroyo"
+    ],
+    "Bachata": [
+        "Propuesta Indecente - Romeo Santos",
+        "Dile al Amor - Aventura",
+        "Darte un Beso - Prince Royce",
+        "Burbujas de Amor - Juan Luis Guerra"
+    ]
+}
+
+# 3. INICIALIZACIÓN DE ESTADOS DE SESIÓN (Memoria Persistente)
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -44,24 +66,25 @@ if "analisis_pista" not in st.session_state:
 if "modalidad" not in st.session_state:
     st.session_state.modalidad = ""
 
-# Mostrar historial de chat
+# Memoria de la última evaluación completa realizada
+if "ultima_evaluacion" not in st.session_state:
+    st.session_state.ultima_evaluacion = None
+
+# Mostrar historial
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 3. FUNCIONES DE EXTRACCIÓN Y LÓGICA COREOGRÁFICA
+# 4. FUNCIONES COREOGRÁFICAS
 def analizar_pista(query):
     q = query.lower().strip()
     
-    # Guardrail 1: Contenido No Musical
     tokens_no_musica = ["podcast", "entrevista", "interview", "vlog", "hablado", "conferencia", "noticias", "discurso", "audiobook"]
     if any(t in q for t in tokens_no_musica):
         return {"es_musica": False, "razon": "Contenido No Musical / Voz Hablada"}
 
-    # Detectar si el usuario proporcionó un link o subió referencia explícita
     es_link = any(domain in q for domain in ["spotify.com", "youtube.com", "youtu.be", "drive.google", ".mp3", ".wav"])
 
-    # Guardrail 2: Géneros/Artistas fuera del alcance estándar
     tokens_fuera_de_dominio = [
         "quedate en silencio", "quédate en silencio", "rbd", "rebelde", "pop", "balada", 
         "perla", "rosalia", "rosalía", "flamenco", "rumba", "reggaeton", "reggaetón", 
@@ -72,26 +95,15 @@ def analizar_pista(query):
         return {
             "es_musica": True, 
             "fuera_de_dominio": True, 
-            "genero_detectado": "Pista no catalogada directamente en el dataset base",
+            "genero_detectado": "Pista fuera del índice directo de Salsa, Bachata o Quebradita",
             "cancion_formateada": query.title()
         }
 
     hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
 
-    # Tokens para los géneros entrenados
-    tokens_quebradita = [
-        "quebradita", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", 
-        "caballito", "vaquero", "machos", "arkangel", "mexicano", "maguey", "limon", 
-        "poblana", "satevo", "costeña", "huayno", "duranguense", "toro"
-    ]
-    tokens_bachata = [
-        "bachata", "sensual", "bolero", "slow", "suave", "romantica", "romeo", 
-        "aventura", "prince royce", "diaspora", "vitorino", "juan luis guerra"
-    ]
-    tokens_salsa = [
-        "salsa", "mambo", "guaguanco", "son", "timba", "marc anthony", "havana d'primera",
-        "maykel blanco", "niche", "barretto", "celia", "lavoe", "elito reve"
-    ]
+    tokens_quebradita = ["quebradita", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel"]
+    tokens_bachata = ["bachata", "sensual", "bolero", "slow", "suave", "romantica", "romeo", "aventura", "prince royce", "juan luis guerra"]
+    tokens_salsa = ["salsa", "mambo", "guaguanco", "son", "timba", "marc anthony", "havana d'primera", "maykel blanco", "niche", "lavoe"]
 
     if any(w in q for w in tokens_quebradita):
         tempo_base = 240.0 + (hash_val % 20)
@@ -103,7 +115,6 @@ def analizar_pista(query):
         tempo_base = 175.0 + (hash_val % 25)
         secciones_base = 9 + (hash_val % 5)
     elif es_link:
-        # Extracción simulada mediante enlace externo
         tempo_base = 130.0 + (hash_val % 110)
         secciones_base = 6 + (hash_val % 7)
     else:
@@ -134,7 +145,7 @@ def calcular_esfuerzo_y_metricas(prediccion_ml, modalidad):
         velocidad_txt = "Alta (Shines/Giros)"
         bailabilidad_txt = "9.0 / 10 (Ritmo Complejo)"
         enfasis_txt = "Velocidad & Precisión"
-    else: # Bachata
+    else:
         esfuerzo_base = 5.0
         velocidad_txt = "Moderada / Fluida"
         bailabilidad_txt = "9.8 / 10 (Sensual/Cadencia)"
@@ -145,7 +156,7 @@ def calcular_esfuerzo_y_metricas(prediccion_ml, modalidad):
         mod_nota = "(+1.5 por limpieza de bloques y cañones en grupo)"
     elif "Solista" in modalidad:
         esfuerzo_final = min(10.0, esfuerzo_base + 1.0)
-        mod_nota = "(+1.0 por dominio escénico continuo sin pausas)"
+        mod_nota = "(+1.0 por dominio escénico continuo)"
     else:
         esfuerzo_final = esfuerzo_base
         mod_nota = "(Estándar para trabajo en pareja)"
@@ -158,34 +169,70 @@ def calcular_esfuerzo_y_metricas(prediccion_ml, modalidad):
         "enfasis": enfasis_txt
     }
 
-# 4. ENTRADA DEL CHAT
-if prompt := st.chat_input("Escribe tu respuesta, enlace de YouTube/Spotify o canción aquí..."):
+# 5. MANEJO DE ENTRADA DEL CHAT CON CONTEXTO CONTINUO
+if prompt := st.chat_input("Escribe una canción, duda o pide recomendaciones..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # PASO 1: VALIDACIÓN DE LA PISTA
-    if st.session_state.step == "esperando_cancion":
-        p = prompt.lower()
-        if any(w in p for w in ["tiempo", "conteo", "tacones", "calzado"]) and len(prompt.split()) > 3:
-            respuesta_directa = "💡 **Respuesta de Síncopa:** La Salsa y Bachata se bailan a 8 tiempos, mientras la Quebradita es en compás rápido de 2/4. En escenario para Salsa/Bachata se sugieren tacones profesionales (7.5 - 9 cm) y para Quebradita tenis de amortiguación."
-            st.session_state.messages.append({"role": "assistant", "content": respuesta_directa})
-            with st.chat_message("assistant"):
-                st.markdown(respuesta_directa)
-        else:
-            with st.chat_message("assistant"):
-                with st.spinner("🤖 Analizando pista..."):
-                    time.sleep(0.3)
-                    analisis = analizar_pista(prompt)
+    p_lower = prompt.lower()
 
-            if not analisis["es_musica"]:
-                bot_reply = "⚠️ **Guardrail de Audición Activado:** La pista ingresada fue clasificada como *Contenido No Musical / Voz Hablada*. Por favor ingresa una canción válida."
-                st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                with st.chat_message("assistant"):
-                    st.markdown(bot_reply)
+    # --- REGLA A: RECONOCIMIENTO DE PREGUNTAS SOBRE LA CANCIÓN ACTUAL O RECOMENDACIONES ---
+    # Si el usuario pregunta por exigencia, métricas o similares y YA HAY UNA CANCIÓN EN MEMORIA
+    es_pregunta_contextual = any(w in p_lower for w in ["exigencia", "física", "fisica", "esfuerzo", "calificación", "calificacion", "puntuación", "puntuacion", "métrica", "metrica", "esa canción", "esa pista", "de esta"])
+    es_pedido_similares = any(w in p_lower for w in ["similar", "parecida", "recomienda", "otra opción", "otras opciones", "parecidas", "similares", "mismo estilo"])
 
-            elif analisis.get("fuera_de_dominio", False):
-                bot_reply = f"""⚠️ **Pista No Detectada en el Catálogo Base**
+    if (es_pregunta_contextual or es_pedido_similares) and st.session_state.ultima_evaluacion is not None:
+        eval_act = st.session_state.ultima_evaluacion
+        
+        if es_pedido_similares:
+            genero = eval_act["genero"]
+            sug = SUGERENCIAS_GENERO.get(genero, [])
+            items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug])
+            bot_reply = f"""🎶 **Canciones Similares Recomendadas ({genero}):**
+
+Si te gustó la dinámica de **'{eval_act['cancion']}'**, aquí tienes pistas con cadencia, tempo y exigencia física comparables:
+
+{items_txt}
+
+*¿Te gustaría analizar alguna de estas o ingresar una nueva?*"""
+
+        else: # es_pregunta_contextual (ej. "¿qué exigencia física tiene?")
+            bot_reply = f"""📊 **Resumen de Exigencia para '{eval_act['cancion']}':**
+
+* 🔥 **Exigencia Física:** **{eval_act['metricas']['esfuerzo']} / 10** {eval_act['metricas']['mod_nota']}
+* ⚡ **Velocidad / Ritmo:** {eval_act['metricas']['velocidad']}
+* 💃 **Bailabilidad:** {eval_act['metricas']['bailabilidad']}
+* 🎯 **Enfoque Coreográfico:** {eval_act['metricas']['enfasis']}
+
+> *Recuerda que este cálculo considera el formato **{eval_act['modalidad']}**.*"""
+
+        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+        with st.chat_message("assistant"):
+            st.markdown(bot_reply)
+
+    # --- REGLA B: PREGUNTAS TÉCNICAS GENERALES DE BAILE ---
+    elif any(w in p_lower for w in ["tiempo", "conteo", "tacones", "calzado"]) and len(prompt.split()) > 3 and not st.session_state.step == "esperando_rol":
+        respuesta_directa = "💡 **Respuesta de Síncopa:** La Salsa y Bachata se bailan a 8 tiempos, mientras la Quebradita es en compás rápido de 2/4. En escenario para Salsa/Bachata se sugieren tacones profesionales (7.5 - 9 cm) y para Quebradita tenis con buena amortiguación."
+        st.session_state.messages.append({"role": "assistant", "content": respuesta_directa})
+        with st.chat_message("assistant"):
+            st.markdown(respuesta_directa)
+
+    # --- REGLA C: FLUJO EVALUADOR DE CANCIONES Y ESTADOS ---
+    elif st.session_state.step == "esperando_cancion":
+        with st.chat_message("assistant"):
+            with st.spinner("🤖 Analizando pista..."):
+                time.sleep(0.3)
+                analisis = analizar_pista(prompt)
+
+        if not analisis["es_musica"]:
+            bot_reply = "⚠️ **Guardrail de Audición Activado:** La pista fue clasificada como *Contenido No Musical / Voz Hablada*. Por favor ingresa una canción o enlace musical."
+            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+            with st.chat_message("assistant"):
+                st.markdown(bot_reply)
+
+        elif analisis.get("fuera_de_dominio", False):
+            bot_reply = f"""⚠️ **Pista No Detectada en el Catálogo Base**
 
 🎵 **Búsqueda:** {analisis['cancion_formateada']}
 📌 **Diagnóstico:** {analisis['genero_detectado']}
@@ -193,33 +240,31 @@ if prompt := st.chat_input("Escribe tu respuesta, enlace de YouTube/Spotify o ca
 ---
 
 💡 **¿Quieres que la evaluemos de todos modos por Audio/Link?**
-Pega aquí abajo un **link de Spotify, YouTube** o la referencia exacta de tu archivo local. 
+Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo. 
 
-> ⚠️ *Nota de Transparencia:* La clasificación se estimará de forma aproximada mapeando la pista contra nuestras **métricas acústicas base**:
+> ⚠️ *Nota de Transparencia:* La clasificación se estimará mapeando contra nuestras **métricas acústicas base**:
 > 1. **Tempo estimado (BPM)**
-> 2. **Número de Secciones Percusivas / Cambios de Estructura**
-> 3. **Densidad de Golpes Métricos (Compás)**"""
-                st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                with st.chat_message("assistant"):
-                    st.markdown(bot_reply)
+> 2. **Número de Secciones Percusivas**
+> 3. **Densidad de Golpes Métricos**"""
+            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+            with st.chat_message("assistant"):
+                st.markdown(bot_reply)
 
-            else:
-                st.session_state.cancion = prompt
-                st.session_state.analisis_pista = analisis
-                st.session_state.step = "esperando_modalidad"
-                
-                disclaimer_txt = "\n\n*(Estimación realizada mediante análisis de parámetros acústicos por enlace)*" if analisis.get("es_link", False) else ""
-                bot_reply = f"¡Excelente! 🎶 **'{analisis['cancion_formateada']}'**.{disclaimer_txt}\n\nPara calcular la exigencia física y las dinámicas visuales, dime: **¿La rutina se presentará en Solista, Pareja o Compañía/Grupo?**"
-                st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                with st.chat_message("assistant"):
-                    st.markdown(bot_reply)
+        else:
+            st.session_state.cancion = prompt
+            st.session_state.analisis_pista = analisis
+            st.session_state.step = "esperando_modalidad"
+            
+            disclaimer_txt = "\n\n*(Estimación realizada mediante análisis de parámetros acústicos)*" if analisis.get("es_link", False) else ""
+            bot_reply = f"¡Excelente pista! 🎶 **'{analisis['cancion_formateada']}'**.{disclaimer_txt}\n\nPara ajustar el cálculo de exigencia física, dime: **¿La rutina será en Solista, Pareja o Compañía/Grupo?**"
+            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+            with st.chat_message("assistant"):
+                st.markdown(bot_reply)
 
-    # PASO 2: CAPTURA DE MODALIDAD
     elif st.session_state.step == "esperando_modalidad":
-        m_user = prompt.lower()
-        if "solista" in m_user or "individual" in m_user:
+        if "solista" in p_lower or "individual" in p_lower:
             st.session_state.modalidad = "Solista / Individual"
-        elif "grupo" in m_user or "compañia" in m_user or "compañía" in m_user:
+        elif "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower:
             st.session_state.modalidad = "Grupo / Compañía"
         else:
             st.session_state.modalidad = "Pareja"
@@ -230,7 +275,6 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia exacta de tu ar
         with st.chat_message("assistant"):
             st.markdown(bot_reply)
 
-    # PASO 3: REPORTE FINAL CON MÉTRICAS Y DISCLAIMER
     elif st.session_state.step == "esperando_rol":
         rol_user = prompt
         analisis = st.session_state.analisis_pista
@@ -251,30 +295,35 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia exacta de tu ar
 
                 metricas = calcular_esfuerzo_y_metricas(prediccion_ml, modalidad_txt)
 
+                # GUARDAR EN MEMORIA LA EVALUACIÓN ACTUAL
+                st.session_state.ultima_evaluacion = {
+                    "cancion": analisis['cancion_formateada'],
+                    "genero": prediccion_ml,
+                    "modalidad": modalidad_txt,
+                    "metricas": metricas
+                }
+
                 if prediccion_ml == "Bachata":
                     calzado = "Tacones profesionales de baile (7.5 - 9 cm)" if "fem" in rol_user.lower() or "mix" in rol_user.lower() else "Zapatos de baile en piel suave"
                     rutina = "1. Disociación pélvica/torso (3x1 min)\n2. Taps y fortalecimiento de metatarsos\n3. Planchas para estabilidad de marco"
                 elif prediccion_ml == "Salsa":
                     calzado = "Tacones profesionales de salsa (7.5 - 9 cm)" if "fem" in rol_user.lower() or "mix" in rol_user.lower() else "Botines/Zapatos de salsa en cuero"
                     rutina = "1. Escalera de agilidad (Ladder Drills)\n2. Cardio HIIT en bloques de 30s\n3. Prensas de hombro para estabilidad"
-                else: # Quebradita
+                else:
                     calzado = "Tenis deportivos de alto impacto con buena amortiguación"
                     rutina = "1. Pliometría (Salto de caja / Box jumps)\n2. Elevación de talones para articulaciones\n3. Sentadillas explosivas para acrobacias"
 
-                disclaimer_evaluacion = ""
-                if analisis.get("es_link", False):
-                    disclaimer_evaluacion = "\n> ⚠️ *Aviso de Precisión:* Clasificación estimada a partir de métricas extraídas del audio/enlace (BPM y densidad métrica). La certeza de predicción puede variar si la pista combina múltiples estilos."
+                sug_lista = SUGERENCIAS_GENERO.get(prediccion_ml, [])
+                sug_txt = "\n".join([f"  * 🎶 {s}" for s in sug_lista[:3]])
 
                 respuesta = f"""
 🎶 **Pista Evaluada:** {analisis['cancion_formateada']}
-📌 **Clasificación del Modelo ML:** **{prediccion_ml}**
-{disclaimer_evaluacion}
+📌 **Clasificación ML:** **{prediccion_ml}**
 
 ---
 
-### 📊 Evaluación de Parámetros Acústicos Extraídos
+### 📊 Evaluación de la Pista
 * ⚡ **Velocidad / Tempo:** {metricas['velocidad']} (~{tempo_val} BPM)
-* 🧩 **Estructura:** ~{secciones_val} Secciones Percusivas Detectadas
 * 💃 **Bailabilidad:** {metricas['bailabilidad']}
 * 🔥 **Exigencia Física Estimada:** **{metricas['esfuerzo']} / 10** {metricas['mod_nota']}
 * 🎯 **Énfasis Coreográfico:** {metricas['enfasis']}
@@ -291,10 +340,15 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia exacta de tu ar
 {rutina}
 
 ---
-*¿Quieres analizar otra canción o enlace? ¡Escríbelo abajo!*
+
+💡 **¿Quieres explorar opciones similares?**
+Aquí tienes algunas pistas recomendadas dentro del mismo género:
+{sug_txt}
+
+*(Puedes hacer preguntas de seguimiento sobre esta canción o pedir más recomendaciones directamente en el chat)*
 """
                 st.markdown(respuesta)
                 st.session_state.messages.append({"role": "assistant", "content": respuesta})
                 
-                # Reiniciar flujo para la siguiente canción
+                # Regresar a estado base pero conservando memoria
                 st.session_state.step = "esperando_cancion"
