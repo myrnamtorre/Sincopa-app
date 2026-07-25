@@ -26,7 +26,7 @@ if os.path.exists(ruta_modelo):
     except Exception as e:
         st.sidebar.error(f"Error al cargar el modelo: {e}")
 
-# 2. BASE DE DATOS DE SUGERENCIAS SIMILARES POR GÉNERO
+# 2. BASE DE DATOS DE SUGERENCIAS SIMILARES
 SUGERENCIAS_GENERO = {
     "Quebradita": [
         "La Culebra - Banda Machos",
@@ -48,7 +48,7 @@ SUGERENCIAS_GENERO = {
     ]
 }
 
-# 3. INICIALIZACIÓN DE ESTADOS DE SESIÓN (Memoria Persistente)
+# 3. INICIALIZACIÓN DE ESTADOS DE SESIÓN
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -65,8 +65,6 @@ if "analisis_pista" not in st.session_state:
     st.session_state.analisis_pista = None
 if "modalidad" not in st.session_state:
     st.session_state.modalidad = ""
-
-# Memoria de la última evaluación completa realizada
 if "ultima_evaluacion" not in st.session_state:
     st.session_state.ultima_evaluacion = None
 
@@ -169,57 +167,60 @@ def calcular_esfuerzo_y_metricas(prediccion_ml, modalidad):
         "enfasis": enfasis_txt
     }
 
-# 5. MANEJO DE ENTRADA DEL CHAT CON CONTEXTO CONTINUO
-if prompt := st.chat_input("Escribe una canción, duda o pide recomendaciones..."):
+# 5. MANEJO DE ENTRADA DEL CHAT
+if prompt := st.chat_input("Escribe tu duda, pregunta por footwork o ingresa otra canción..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     p_lower = prompt.lower()
 
-    # --- REGLA A: RECONOCIMIENTO DE PREGUNTAS SOBRE LA CANCIÓN ACTUAL O RECOMENDACIONES ---
-    # Si el usuario pregunta por exigencia, métricas o similares y YA HAY UNA CANCIÓN EN MEMORIA
-    es_pregunta_contextual = any(w in p_lower for w in ["exigencia", "física", "fisica", "esfuerzo", "calificación", "calificacion", "puntuación", "puntuacion", "métrica", "metrica", "esa canción", "esa pista", "de esta"])
-    es_pedido_similares = any(w in p_lower for w in ["similar", "parecida", "recomienda", "otra opción", "otras opciones", "parecidas", "similares", "mismo estilo"])
+    # Comprobar si el usuario quiere iniciar la evaluación de una canción totalmente nueva
+    pide_nueva_cancion = any(w in p_lower for w in ["evaluar otra", "nueva canción", "otra canción", "analizar otra", "cambiar de canción", "reset"])
 
-    if (es_pregunta_contextual or es_pedido_similares) and st.session_state.ultima_evaluacion is not None:
+    # --- CASO A: EL USUARIO YA TIENE UNA CANCIÓN EVALUADA Y HACE UNA PREGUNTA DE SEGUIMIENTO ---
+    if st.session_state.step == "evaluado" and not pide_nueva_cancion:
         eval_act = st.session_state.ultima_evaluacion
-        
-        if es_pedido_similares:
-            genero = eval_act["genero"]
+        genero = eval_act["genero"]
+        cancion_nombre = eval_act["cancion"]
+
+        # 1. Dudas de Footwork / Paso Básico / Shines
+        if any(w in p_lower for w in ["footwork", "pasos", "shines", "zapateado", "pies", "brincos"]):
+            if genero == "Salsa":
+                respuesta_seguimiento = f"👟 **Footwork en '{cancion_nombre}' (Salsa):**\n\n¡Absolutamente! Con un tempo de ~{eval_act['tempo']} BPM, esta pista es ideal para incluir **Shines / Footwork rápido** en los cortes de mambo o descargas. Te recomiendo incorporar marcaciones sincopadas, susy q, y pasadas de pie a tiempo y a contratiempo."
+            elif genero == "Bachata":
+                respuesta_seguimiento = f"👟 **Footwork en '{cancion_nombre}' (Bachata):**\n\n¡Por supuesto! En Bachata el footwork (o paso básico sincopado) se luce en los cortes instrumentales de requinto. Puedes integrar *sincopados en 1 y 2*, *doble tap*, y desplazamientos laterales con disociación de cadencia."
+            else: # Quebradita
+                respuesta_seguimiento = f"👟 **Footwork / Zapateado en '{cancion_nombre}' (Quebradita):**\n\n¡Definitivamente! El footwork aquí se traduce en **Zapateado continuo y brincos alternados**. Es el corazón de la pieza junto con las acrobacias."
+
+        # 2. Dudas sobre Recomendaciones Similares
+        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "opciones", "mismo estilo"]):
             sug = SUGERENCIAS_GENERO.get(genero, [])
             items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug])
-            bot_reply = f"""🎶 **Canciones Similares Recomendadas ({genero}):**
+            respuesta_seguimiento = f"🎶 **Canciones Similares a '{cancion_nombre}' ({genero}):**\n\nAquí tienes pistas con métricas y cadencia similares:\n\n{items_txt}"
 
-Si te gustó la dinámica de **'{eval_act['cancion']}'**, aquí tienes pistas con cadencia, tempo y exigencia física comparables:
+        # 3. Dudas sobre Exigencia / Métricas
+        elif any(w in p_lower for w in ["exigencia", "fisica", "física", "esfuerzo", "puntuacion", "puntuación", "métrica"]):
+            respuesta_seguimiento = f"📊 **Exigencia Física de '{cancion_nombre}':**\n\n* **Nivel:** **{eval_act['metricas']['esfuerzo']} / 10** {eval_act['metricas']['mod_nota']}\n* **Velocidad:** {eval_act['metricas']['velocidad']}\n* **Formato:** {eval_act['modalidad']}"
 
-{items_txt}
+        # 4. Respuesta conversacional general manteniendo la memoria
+        else:
+            respuesta_seguimiento = f"💡 **Síncopa:** Sobre **'{cancion_nombre}'** ({genero}): Puedes adaptar la rutina agregando elementos técnicos como footwork, variaciones de marco en pareja o aceleraciones en las secciones percusivas.\n\n*Si quieres evaluar una pista diferente, dime 'analizar otra canción'.*"
 
-*¿Te gustaría analizar alguna de estas o ingresar una nueva?*"""
-
-        else: # es_pregunta_contextual (ej. "¿qué exigencia física tiene?")
-            bot_reply = f"""📊 **Resumen de Exigencia para '{eval_act['cancion']}':**
-
-* 🔥 **Exigencia Física:** **{eval_act['metricas']['esfuerzo']} / 10** {eval_act['metricas']['mod_nota']}
-* ⚡ **Velocidad / Ritmo:** {eval_act['metricas']['velocidad']}
-* 💃 **Bailabilidad:** {eval_act['metricas']['bailabilidad']}
-* 🎯 **Enfoque Coreográfico:** {eval_act['metricas']['enfasis']}
-
-> *Recuerda que este cálculo considera el formato **{eval_act['modalidad']}**.*"""
-
-        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+        st.session_state.messages.append({"role": "assistant", "content": respuesta_seguimiento})
         with st.chat_message("assistant"):
-            st.markdown(bot_reply)
+            st.markdown(respuesta_seguimiento)
 
-    # --- REGLA B: PREGUNTAS TÉCNICAS GENERALES DE BAILE ---
-    elif any(w in p_lower for w in ["tiempo", "conteo", "tacones", "calzado"]) and len(prompt.split()) > 3 and not st.session_state.step == "esperando_rol":
-        respuesta_directa = "💡 **Respuesta de Síncopa:** La Salsa y Bachata se bailan a 8 tiempos, mientras la Quebradita es en compás rápido de 2/4. En escenario para Salsa/Bachata se sugieren tacones profesionales (7.5 - 9 cm) y para Quebradita tenis con buena amortiguación."
+    # --- CASO B: PREGUNTAS TÉCNICAS GENERALES FUERA DE EVALUACIÓN ---
+    elif any(w in p_lower for w in ["tiempo", "conteo", "tacones", "calzado"]) and len(prompt.split()) > 3 and st.session_state.step == "esperando_cancion":
+        respuesta_directa = "💡 **Respuesta de Síncopa:** La Salsa y Bachata se bailan a 8 tiempos, mientras la Quebradita es en compás rápido de 2/4. En escenario para Salsa/Bachata se sugieren tacones profesionales (7.5 - 9 cm) y para Quebradita tenis de amortiguación."
         st.session_state.messages.append({"role": "assistant", "content": respuesta_directa})
         with st.chat_message("assistant"):
             st.markdown(respuesta_directa)
 
-    # --- REGLA C: FLUJO EVALUADOR DE CANCIONES Y ESTADOS ---
-    elif st.session_state.step == "esperando_cancion":
+    # --- CASO C: PASO 1 - EVALUACIÓN DE NUEVA CANCIÓN ---
+    elif st.session_state.step == "esperando_cancion" or pide_nueva_cancion:
+        st.session_state.step = "esperando_cancion"
         with st.chat_message("assistant"):
             with st.spinner("🤖 Analizando pista..."):
                 time.sleep(0.3)
@@ -261,6 +262,7 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
             with st.chat_message("assistant"):
                 st.markdown(bot_reply)
 
+    # --- CASO D: PASO 2 - SELECCIÓN DE MODALIDAD ---
     elif st.session_state.step == "esperando_modalidad":
         if "solista" in p_lower or "individual" in p_lower:
             st.session_state.modalidad = "Solista / Individual"
@@ -275,6 +277,7 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
         with st.chat_message("assistant"):
             st.markdown(bot_reply)
 
+    # --- CASO E: PASO 3 - REPORTE FINAL Y PASO A ESTADO "EVALUADO" ---
     elif st.session_state.step == "esperando_rol":
         rol_user = prompt
         analisis = st.session_state.analisis_pista
@@ -295,13 +298,15 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
 
                 metricas = calcular_esfuerzo_y_metricas(prediccion_ml, modalidad_txt)
 
-                # GUARDAR EN MEMORIA LA EVALUACIÓN ACTUAL
+                # GUARDAR EVALUACIÓN Y CAMBIAR ESTADO A "evaluado"
                 st.session_state.ultima_evaluacion = {
                     "cancion": analisis['cancion_formateada'],
                     "genero": prediccion_ml,
                     "modalidad": modalidad_txt,
+                    "tempo": tempo_val,
                     "metricas": metricas
                 }
+                st.session_state.step = "evaluado"
 
                 if prediccion_ml == "Bachata":
                     calzado = "Tacones profesionales de baile (7.5 - 9 cm)" if "fem" in rol_user.lower() or "mix" in rol_user.lower() else "Zapatos de baile en piel suave"
@@ -345,10 +350,7 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
 Aquí tienes algunas pistas recomendadas dentro del mismo género:
 {sug_txt}
 
-*(Puedes hacer preguntas de seguimiento sobre esta canción o pedir más recomendaciones directamente en el chat)*
+*(Puedes hacer preguntas de seguimiento sobre esta canción, como pedir footwork, recomendaciones o consultar otra canción)*
 """
                 st.markdown(respuesta)
                 st.session_state.messages.append({"role": "assistant", "content": respuesta})
-                
-                # Regresar a estado base pero conservando memoria
-                st.session_state.step = "esperando_cancion"
