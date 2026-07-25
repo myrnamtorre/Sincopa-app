@@ -203,19 +203,31 @@ if prompt := st.chat_input("Escribe tu duda, pregunta por footwork o ingresa otr
             else:
                 respuesta_seguimiento = f"👟 **Footwork / Zapateado en '{cancion_nombre}' (Quebradita):**\n\n¡Definitivamente! El footwork aquí es **Zapateado continuo y brincos alternados**, combinados con remates al compás."
 
-        # A3: Recomendaciones de canciones similares
-        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "opciones", "mismo estilo"]):
-            sug = SUGERENCIAS_GENERO.get(genero, [])
+        # A3: Recomendaciones de canciones o sugerencias de género
+        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones"]):
+            gen_buscado = genero
+            if "salsa" in p_lower:
+                gen_buscado = "Salsa"
+            elif "bachata" in p_lower:
+                gen_buscado = "Bachata"
+            elif "quebradita" in p_lower or "banda" in p_lower:
+                gen_buscado = "Quebradita"
+
+            sug = SUGERENCIAS_GENERO.get(gen_buscado, [])
             items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug])
-            respuesta_seguimiento = f"🎶 **Canciones Similares a '{cancion_nombre}' ({genero}):**\n\nAquí tienes pistas con métricas y cadencia comparables:\n\n{items_txt}"
+            respuesta_seguimiento = f"🎶 **Sugerencias de {gen_buscado} (ideales para {eval_act['modalidad']}):**\n\nAquí tienes excelentes opciones con buena métrica y cadencia:\n\n{items_txt}"
 
         # A4: Exigencia física o métricas
         elif any(w in p_lower for w in ["exigencia", "fisica", "física", "esfuerzo", "puntuacion", "puntuación", "métrica"]):
             respuesta_seguimiento = f"📊 **Exigencia Física de '{cancion_nombre}':**\n\n* **Nivel:** **{eval_act['metricas']['esfuerzo']} / 10** {eval_act['metricas']['mod_nota']}\n* **Velocidad:** {eval_act['metricas']['velocidad']}\n* **Formato:** {eval_act['modalidad']}"
 
-        # A5: Respuesta conversacional por defecto en estado evaluado
+        # A5: Calzado o Vestuario
+        elif any(w in p_lower for w in ["tacones", "calzado", "zapatos", "vestuario", "ropa", "tenis"]):
+            respuesta_seguimiento = f"👠 **Calzado y Vestuario para '{cancion_nombre}' ({genero}):**\n\nPara esta rutina en formato **{eval_act['modalidad']}**, se sugiere utilizar vestuario dinámico con buena movilidad. En calzado: tacones profesionales de flexión (7.5 - 9 cm) para baile latino o botines de cuero con suela de gamuza si es rol masculino/salsa dura."
+
+        # A6: Respuesta conversacional por defecto en estado evaluado
         else:
-            respuesta_seguimiento = f"💡 **Síncopa:** Sobre **'{cancion_nombre}'** ({genero}): Puedes hacer consultas sobre minutos de footwork, recomendaciones de calzado, vestuario o pedir canciones similares.\n\n*(Escribe 'analizar otra canción' cuando quieras evaluar una pista nueva)*."
+            respuesta_seguimiento = f"💡 **Síncopa:** Sobre **'{cancion_nombre}'** ({genero}): Puedes preguntarme por minutos de footwork, recomendaciones de canciones, calzado, vestuario o exigir métricas de esfuerzo.\n\n*(Escribe 'analizar otra canción' cuando quieras evaluar una pista nueva)*."
 
         st.session_state.messages.append({"role": "assistant", "content": respuesta_seguimiento})
         with st.chat_message("assistant"):
