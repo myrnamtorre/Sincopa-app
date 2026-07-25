@@ -1,55 +1,3 @@
-import streamlit as st
-import numpy as np
-import time
-import joblib
-import os
-import pandas as pd
-import hashlib
-
-st.set_page_config(
-    page_title="Síncopa • Asistente Coreográfico",
-    page_icon="💃",
-    layout="centered"
-)
-
-st.title("💃 Síncopa: Asistente Coreográfico")
-st.caption("🤖 Agente de IA para Análisis Rítmico, Dinámica Coreográfica y Acondicionamiento")
-st.markdown("---")
-
-# Carga del modelo Random Forest
-ruta_modelo = 'modelo_sincopa_rf.joblib'
-modelo = None
-if os.path.exists(ruta_modelo):
-    try:
-        modelo = joblib.load(ruta_modelo)
-        st.sidebar.success("🤖 Backend: Modelo ML Activo")
-    except Exception as e:
-        st.sidebar.error(f"Error al cargar el modelo: {e}")
-
-# --- MENSAJE DE BIENVENIDA CONVERSACIONAL ---
-st.info("👋 **¡Hola! Soy Síncopa, tu Asistente Coreográfico.** ¿Con qué canción o artista te puedo ayudar hoy?")
-
-cancion_artista = st.text_input(
-    "1. Escribe el Nombre de la Canción y/o Artista:",
-    placeholder="Ej. Yo Represento, Maykel Blanco, Aventura, Romeo Santos, Podcast de Ciencia..."
-)
-
-# --- OPCIONES COREOGRÁFICAS ADICIONALES ---
-col_opt1, col_opt2 = st.columns(2)
-
-with col_opt1:
-    modalidad = st.selectbox(
-        "2. Modalidad de la Coreografía:",
-        ["Pareja", "Grupo / Compañía", "Solista / Individual"]
-    )
-
-with col_opt2:
-    genero_bailarin = st.radio(
-        "3. Rol / Género del Bailarín:",
-        ["Femenino (Bailarina)", "Masculino (Bailarín)", "Mixto / Ambos"],
-        horizontal=True
-    )
-
 # REPERTORIO DINÁMICO POR ARTISTA
 REPERTORIO_ARTISTAS = {
     "maykel blanco": ["Ya Se Acabó", "Recoge y Vete", "El Chorro"],
@@ -57,7 +5,8 @@ REPERTORIO_ARTISTAS = {
     "romeo santos": ["Eres Mía", "Centavito", "Imitadora"],
     "prince royce": ["Stand By Me", "El Amor Que Perdimos", "Corazón Sin Cara"],
     "marc anthony": ["Vivir Mi Vida", "Y Hubo Alguien", "Flor Pálida"],
-    "banda machos": ["Un Indio Quiere Llorar", "Leña de Pirul", "Al Gato y Al Ratón"]
+    "banda machos": ["Un Indio Quiere Llorar", "Leña de Pirul", "Al Gato y Al Ratón"],
+    "arkangel": ["La Roncona", "El Anabacoa", "Te Esperaré"]
 }
 
 def obtener_sugerencias(query, genero):
@@ -83,7 +32,7 @@ def obtener_sugerencias(query, genero):
 * 🎵 **No Bailes de Caballito** – Mi Banda El Mexicano
 * 🎵 **El Anabacoa** – Banda Arkangel R-15"""
 
-# ENGINE INTELIGENTE DE EXTRACCIÓN ACOUSTICA
+# ENGINE INTELIGENTE DE EXTRACCIÓN ACOUSTICA REFORZADO
 def extraer_features_inteligentes(query):
     q = query.lower().strip()
     
@@ -92,11 +41,22 @@ def extraer_features_inteligentes(query):
     if any(t in q for t in tokens_no_musicales):
         return {"es_musica": False, "razon": "Contenido No Musical / Voz Hablada"}
 
-    # 2. ESTIMACIÓN DE TEMPO Y SECCIONES
+    # 2. DICCIONARIOS Y TOKENS REFORZADOS POR GÉNERO
+    tokens_quebradita = [
+        "quebradita", "banda", "zapateado", "brinco", "fast", "speed",
+        "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", 
+        "el mexicano", "maguey", "limon", "poblana", "satevo", "costeña"
+    ]
+    
+    tokens_bachata = [
+        "bachata", "sensual", "bolero", "slow", "suave", "romantica",
+        "romeo", "aventura", "prince royce", "diaspora", "vitorino", "juan luis guerra"
+    ]
+
     hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
     
-    es_rapido = any(w in q for w in ["quebradita", "banda", "zapateado", "brinco", "fast", "speed"])
-    es_lento = any(w in q for w in ["bachata", "sensual", "bolero", "slow", "suave", "romantica"])
+    es_rapido = any(w in q for w in tokens_quebradita)
+    es_lento = any(w in q for w in tokens_bachata)
     
     if es_rapido:
         tempo_base = 240.0 + (hash_val % 20)  # Quebradita (~240-260 BPM)
@@ -114,6 +74,41 @@ def extraer_features_inteligentes(query):
         "secciones": secciones_base,
         "cancion_formateada": query.title()
     }
+
+# FUNCIÓN PARA RESPONDER DUDAS ESPECÍFICAS
+def responder_duda_usuario(pregunta, genero, tempo):
+    p = pregunta.lower().strip()
+    
+    if any(w in p for w in ["tiempo", "conteo", "contar", "como se baila", "compás"]):
+        if genero == "Salsa":
+            return "⏱️ **Respuesta sobre el Conteo:** La salsa se baila a **8 tiempos** musicales (marcando pisadas en 1,2,3 y 5,6,7). Según el estilo de tu compañía, se puede bailar en **On1** (Break en 1) u **On2/Mambo** (Break en 2)."
+        elif genero == "Bachata":
+            return "⏱️ **Respuesta sobre el Conteo:** La bachata se cuenta a **8 tiempos** (1,2,3-tap / 5,6,7-tap). El acento o punteado pélvico se realiza sutilmente en los tiempos 4 y 8."
+        else:
+            return "⏱️ **Respuesta sobre el Conteo:** La quebradita se baila en compás rápido de **2/4** (*brinco-zapateado continuo*). Se mantiene una marcación métrica ágil y constante acorde a la percusión de la banda."
+
+    elif any(w in p for w in ["misma exigencia", "tempo", "velocidad", "similar", "mismo ritmo"]):
+        if genero == "Salsa":
+            return f"⚡ **Opciones con exigencia/tempo similar (~{tempo} BPM):**\n* 🎵 *Agua Que Cae del Cielo* – Septeto Acarey\n* 🎵 *La Pelota* – Ray Barretto\n* 🎵 *Recoge y Vete* – Maykel Blanco"
+        elif genero == "Bachata":
+            return f"⚡ **Opciones con exigencia/tempo similar (~{tempo} BPM):**\n* 🎵 *Sobredosis* – Romeo Santos ft. Ozuna\n* 🎵 *Stand By Me* – Prince Royce\n* 🎵 *Sola* – Hector Acosta 'El Torito'"
+        else:
+            return f"⚡ **Opciones con exigencia/tempo similar (~{tempo} BPM):**\n* 🎵 *La Culebra* – Banda Machos\n* 🎵 *No Bailes de Caballito* – Mi Banda El Mexicano\n* 🎵 *Vámonos de Fiesta* – Banda Maguey"
+
+    elif any(w in p for w in ["principiante", "intermedio", "facil", "dificultad", "adaptar"]):
+        return "📉 **Adaptación para Nivel Principiante:** Reduce la velocidad sugerida de footwork/shines a la mitad del tiempo recomendado y prioriza secuencias básicas en pareja con marcos (*frames*) firmes antes de acelerar los giros."
+
+    elif any(w in p for w in ["otro artista", "artistas", "repertorio"]):
+        if genero == "Salsa":
+            return "🎤 **Otros Artistas Sugeridos para Salsa:** Marc Anthony, Havana D'Primera, Alexander Abreu, Elito Revé, Grupo Niche."
+        elif genero == "Bachata":
+            return "🎤 **Otros Artistas Sugeridos para Bachata:** Romeo Santos, Prince Royce, Aventura, Dani J, Juan Luis Guerra."
+        else:
+            return "🎤 **Otros Artistas Sugeridos para Quebradita:** Banda Machos, Banda Arkangel R-15, Mi Banda El Mexicano, Banda Maguey."
+
+    else:
+        return f"💡 **Respuesta de Síncopa:** Para esta pista de **{genero}** (evaluada a ~{tempo} BPM), te recomiendo mantener la concentración en la precisión rítmica del conteo y usar el calzado adecuado para proteger las articulaciones durante la rutina."
+
 
 if st.button("💬 Consultar al Asistente Coreográfico"):
     if not cancion_artista.strip():
@@ -143,22 +138,30 @@ if st.button("💬 Consultar al Asistente Coreográfico"):
                 
                 # MÉTRICAS EN COLUMNAS
                 col1, col2, col3 = st.columns(3)
-                
-                # SUGERENCIAS DE VESTUARIO Y CALZADO DINÁMICAS
-                if "Femenino" in genero_bailarin or "Mixto" in genero_bailarin:
-                    calzado_txt = "Tacones profesionales de baile (7.5 cm - 9 cm) con excelente agarre para empeine e hiperextensión limpia."
-                    consejo_punta = " ⚠️ *Nota de Juzgamiento:* Uso obligatorio de tacón en escenario para evitar penalizaciones en puntuación de línea y postura."
-                else:
-                    calzado_txt = "Zapatos/Botines de baile en piel suave con suela de gamuza flexible o tenis de ensayo."
-                    consejo_punta = ""
 
-                # VESTUARIO SEGÚN GÉNERO
+                # CONFIGURACIÓN TÉCNICA DE CALZADO Y VESTUARIO POR GÉNERO
                 if prediccion_ml == "Bachata":
-                    vestuario_txt = "Vestuario vistoso con flecos o pedrería de alto brillo en cadera para enfatizar las ondas y el trabajo pélvico."
+                    if "Femenino" in genero_bailarin or "Mixto" in genero_bailarin:
+                        calzado_txt = "Tacones profesionales de baile (7.5 cm - 9 cm) con suela flexible para favorecer el pivote y la disociación pélvica."
+                        consejo_punta = " ⚠️ *Nota de Juzgamiento:* Uso de tacón recomendado en escena para no penalizar líneas de pierna y postura."
+                    else:
+                        calzado_txt = "Zapatos de baile en piel suave con suela de gamuza."
+                        consejo_punta = ""
+                    vestuario_txt = "Vestuario vistoso con flecos o pedrería de alto brillo en cadera para acentuar el movimiento y las ondas."
+
                 elif prediccion_ml == "Salsa":
-                    vestuario_txt = "Traje de competencia/escena con piedras de cristal, pedrería que refleje la luz de los focos y falda corta de corte dinámico."
-                else:
-                    vestuario_txt = "Traje tradicional de quebradita vistoso, con flecos metalizados, pedrería, aplicaciones de cuero y sombrero estructurado."
+                    if "Femenino" in genero_bailarin or "Mixto" in genero_bailarin:
+                        calzado_txt = "Tacones profesionales de salsa (7.5 cm - 9 cm) con firme sujeción en empeine y tobillo."
+                        consejo_punta = " ⚠️ *Nota de Juzgamiento:* Uso obligatorio de tacón profesional en juzgamiento para proyectar hiperextensión y velocidad en shines."
+                    else:
+                        calzado_txt = "Zapatos o botines de salsa en cuero con suela de gamuza flexible."
+                        consejo_punta = ""
+                    vestuario_txt = "Traje de escena con pedrería de cristal reflectante, flecos y falda corta de corte dinámico."
+
+                else: # Quebradita
+                    calzado_txt = "Tenis deportivos de alto impacto con buena amortiguación en talón o botines flexibles tradicionales."
+                    consejo_punta = " 💡 *Nota Técnica:* La quebradita se baila con tenis o calzado plano para proteger las articulaciones en los saltos pliométricos y facilitar el zapateado continuo."
+                    vestuario_txt = "Traje vaquero de quebradita vistoso con aplicaciones de cuero, flecos metalizados, pedrería brillante y sombrero estructurado."
 
                 # ESTRUCTURA COREOGRÁFICA SEGÚN MODALIDAD
                 if modalidad == "Grupo / Compañía":
@@ -212,7 +215,7 @@ if st.button("💬 Consultar al Asistente Coreográfico"):
                     st.markdown("### 💡 Análisis y Dinámica Coreográfica")
                     st.write(f"• **Distribución por Modalidad ({modalidad}):** {distribucion_txt}")
                     st.write("• **Conteo Rítmico Sugerido:** Compás acelerado a **2/4** (*mbo/brinco* constante).")
-                    st.write(f"• **Calzado Recomendado:** {calzado_txt}")
+                    st.write(f"• **Calzado Recomendado:** {calzado_txt}{consejo_punta}")
                     st.write(f"• **Vestuario & Escena:** {vestuario_txt}")
 
                     with st.expander("🏋️‍♀️ **Ver Rutina de Ejercicios Recomendados para Entrenar**", expanded=True):
@@ -222,10 +225,19 @@ if st.button("💬 Consultar al Asistente Coreográfico"):
                         3. **Fuerza de Tren Inferior:** Sentadillas y desplantes búlgaros para estabilizar rodillas en las caídas acrobáticas.
                         """)
 
-                # BLOQUE DE RECOMENDACIONES (DEL MISMO ARTISTA O DEL GÉNERO)
+                # BLOQUE DE RECOMENDACIONES
                 st.markdown(obtener_sugerencias(cancion_artista, prediccion_ml))
 
                 st.caption(f"📊 Parámetros Extraídos: {tempo_val} BPM | {secciones_val} Secciones | Clasificador: Random Forest")
 
-st.markdown("---")
-st.caption("🔒 Prototipo de IA Conversacional desarrollado para el Diplomado en Ciencia de Datos.")
+                # --- NUEVA SECCIÓN DE INTERACCIÓN / PREGUNTAS LIBRES ---
+                st.markdown("---")
+                st.subheader("💬 ¿Tienes dudas sobre esta coreografía?")
+                pregunta_extra = st.text_input(
+                    "Pregúntale algo más a Síncopa sobre esta pista:",
+                    placeholder="Ej. ¿En qué tiempo se baila?, canciones con la misma velocidad, adaptaciones..."
+                )
+                
+                if pregunta_extra:
+                    respuesta = responder_duda_usuario(pregunta_extra, prediccion_ml, tempo_val)
+                    st.info(respuesta)
