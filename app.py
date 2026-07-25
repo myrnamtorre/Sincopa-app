@@ -75,7 +75,7 @@ if "modalidad" not in st.session_state:
 if "ultima_evaluacion" not in st.session_state:
     st.session_state.ultima_evaluacion = None
 if "ultimo_genero_sugerido" not in st.session_state:
-    st.session_state.ultimo_genero_sugerido = "Quebradita"
+    st.session_state.ultimo_genero_sugerido = "Bachata"
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
@@ -189,12 +189,13 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
     # Comprobar si el usuario pide explícitamente cambiar de canción
     pide_nueva_cancion = any(w in p_lower for w in ["evaluar otra", "nueva canción", "otra canción", "analizar otra", "cambiar de canción", "reset"])
 
-    # Detección ampliada de consultas de sugerencias
+    # Detección ampliada de consultas de sugerencias y artistas
     palabras_sugerencia = [
         "sugerencia", "sugerencias", "sugieres", "sugiere", 
         "recomienda", "recomiendame", "recomiéndame", "recomendacion", "recomendaciones", 
         "opciones", "canciones", "cancion", "ideas", "que escuchar",
-        "bachatas", "salsas", "quebraditas", "temas", "pistas"
+        "bachatas", "salsas", "quebraditas", "temas", "pistas",
+        "romeo", "santos", "aventura", "prince", "royce", "guerra", "lavoe", "anthony"
     ]
     
     menciona_genero_plural = any(g in p_lower for g in ["bachatas", "salsas", "quebraditas"])
@@ -206,14 +207,14 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
 
         if "quebradita" in p_lower or "quebraditas" in p_lower or "banda" in p_lower:
             gen_buscado = "Quebradita"
-        elif "bachata" in p_lower or "bachatas" in p_lower:
+        elif "bachata" in p_lower or "bachatas" in p_lower or any(art in p_lower for art in ["romeo", "santos", "aventura", "prince", "royce", "guerra"]):
             gen_buscado = "Bachata"
-        elif "salsa" in p_lower or "salsas" in p_lower:
+        elif "salsa" in p_lower or "salsas" in p_lower or any(art in p_lower for art in ["lavoe", "anthony", "colon", "arroyo"]):
             gen_buscado = "Salsa"
         elif pide_mas and st.session_state.ultimo_genero_sugerido:
             gen_buscado = st.session_state.ultimo_genero_sugerido
         else:
-            gen_buscado = st.session_state.ultimo_genero_sugerido if st.session_state.ultimo_genero_sugerido else "Quebradita"
+            gen_buscado = st.session_state.ultimo_genero_sugerido if st.session_state.ultimo_genero_sugerido else "Bachata"
 
         # Guardar contexto
         st.session_state.ultimo_genero_sugerido = gen_buscado
@@ -224,9 +225,20 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
         elif "solista" in p_lower or "solistas" in p_lower or "individual" in p_lower:
             mod_txt = "Solista / Individual"
 
-        sug = SUGERENCIAS_GENERO.get(gen_buscado, [])
-        items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug])
-        bot_reply = f"🎶 **Recomendaciones de {gen_buscado} (para {mod_txt}):**\n\nAquí tienes las opciones de nuestro catálogo con el tempo ideal:\n\n{items_txt}\n\n*¿Cuál de estas te gustaría evaluar formalmente? Escribe su nombre.*"
+        sug_base = SUGERENCIAS_GENERO.get(gen_buscado, [])
+
+        # Filtrado por artista si aplica
+        artistas_clave = ["romeo", "santos", "aventura", "prince", "royce", "guerra", "lavoe", "anthony", "machos", "arkangel", "tucanes"]
+        menciones_artista = [art for art in artistas_clave if art in p_lower]
+
+        if menciones_artista:
+            sug_filtradas = [s for s in sug_base if any(art in s.lower() for art in menciones_artista)]
+            sug_finales = sug_filtradas if sug_filtradas else sug_base
+        else:
+            sug_finales = sug_base
+
+        items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug_finales])
+        bot_reply = f"🎶 **Recomendaciones de {gen_buscado} (para {mod_txt}):**\n\nAquí tienes las opciones con la métrica y ritmo adecuado:\n\n{items_txt}\n\n*¿Cuál de estas te gustaría evaluar formalmente? Escribe su nombre.*"
         
         st.session_state.messages.append({"role": "assistant", "content": bot_reply})
         with st.chat_message("assistant"):
@@ -280,12 +292,12 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
             else:
                 respuesta_seguimiento = f"👟 **Footwork / Zapateado en '{cancion_nombre}' (Quebradita):**\n\n¡Definitivamente! El footwork aquí es **Zapateado continuo y brincos alternados**, combinados con remates al compás."
 
-        # A4: Recomendaciones de canciones o sugerencias de género
-        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones", "sugerencia", "sugerencias", "bachatas", "salsas", "quebraditas"]):
+        # A4: Recomendaciones de canciones o sugerencias por género/artista
+        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones", "sugerencia", "sugerencias", "bachatas", "salsas", "quebraditas", "romeo", "santos", "aventura", "prince", "royce", "lavoe", "anthony"]):
             gen_buscado = genero
             if "salsa" in p_lower or "salsas" in p_lower:
                 gen_buscado = "Salsa"
-            elif "bachata" in p_lower or "bachatas" in p_lower:
+            elif "bachata" in p_lower or "bachatas" in p_lower or any(art in p_lower for art in ["romeo", "santos", "aventura", "prince", "royce"]):
                 gen_buscado = "Bachata"
             elif "quebradita" in p_lower or "quebraditas" in p_lower or "banda" in p_lower:
                 gen_buscado = "Quebradita"
@@ -299,9 +311,21 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
                 mod_actual = "Pareja"
 
             st.session_state.ultimo_genero_sugerido = gen_buscado
-            sug = SUGERENCIAS_GENERO.get(gen_buscado, [])
-            items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug])
-            respuesta_seguimiento = f"🎶 **Sugerencias de {gen_buscado} (ideales para {mod_actual}):**\n\nAquí tienes excelentes opciones con buena métrica y cadencia:\n\n{items_txt}"
+            sug_base = SUGERENCIAS_GENERO.get(gen_buscado, [])
+
+            # Filtrado por artista
+            artistas_clave = ["romeo", "santos", "aventura", "prince", "royce", "guerra", "lavoe", "anthony", "machos", "arkangel", "tucanes"]
+            menciones_artista = [art for art in artistas_clave if art in p_lower]
+
+            if menciones_artista:
+                sug_filtradas = [s for s in sug_base if any(art in s.lower() for art in menciones_artista)]
+                sug_finales = sug_filtradas if sug_filtradas else sug_base
+            else:
+                sug_finales = sug_base
+
+            items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug_finales])
+            subtitulo_artista = f" de **{prompt.title()}**" if menciones_artista else ""
+            respuesta_seguimiento = f"🎶 **Sugerencias de {gen_buscado}{subtitulo_artista} (ideales para {mod_actual}):**\n\nAquí tienes las opciones correspondientes en nuestro catálogo:\n\n{items_txt}"
 
         # A5: Exigencia física o métricas
         elif any(w in p_lower for w in ["exigencia", "fisica", "física", "esfuerzo", "puntuacion", "puntuación", "métrica"]):
