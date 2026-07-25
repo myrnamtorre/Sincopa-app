@@ -110,9 +110,9 @@ def analizar_pista(query):
 
     hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
 
-    tokens_quebradita = ["quebradita", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel"]
-    tokens_bachata = ["bachata", "sensual", "bolero", "slow", "suave", "romantica", "romeo", "aventura", "prince royce", "juan luis guerra"]
-    tokens_salsa = ["salsa", "mambo", "guaguanco", "son", "timba", "marc anthony", "havana d'primera", "maykel blanco", "niche", "lavoe"]
+    tokens_quebradita = ["quebradita", "quebraditas", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel"]
+    tokens_bachata = ["bachata", "bachatas", "sensual", "bolero", "slow", "suave", "romantica", "romeo", "aventura", "prince royce", "juan luis guerra"]
+    tokens_salsa = ["salsa", "salsas", "mambo", "guaguanco", "son", "timba", "marc anthony", "havana d'primera", "maykel blanco", "niche", "lavoe"]
 
     if any(w in q for w in tokens_quebradita):
         tempo_base = 240.0 + (hash_val % 20)
@@ -189,36 +189,39 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
     # Comprobar si el usuario pide explícitamente cambiar de canción
     pide_nueva_cancion = any(w in p_lower for w in ["evaluar otra", "nueva canción", "otra canción", "analizar otra", "cambiar de canción", "reset"])
 
-    # Detección amplia de consultas de sugerencias
+    # Detección ampliada de consultas de sugerencias
     palabras_sugerencia = [
         "sugerencia", "sugerencias", "sugieres", "sugiere", 
         "recomienda", "recomiendame", "recomiéndame", "recomendacion", "recomendaciones", 
-        "opciones", "canciones", "ideas", "que escuchar"
+        "opciones", "canciones", "cancion", "ideas", "que escuchar",
+        "bachatas", "salsas", "quebraditas", "temas", "pistas"
     ]
-    es_pregunta_sugerencia = any(w in p_lower for w in palabras_sugerencia)
+    
+    menciona_genero_plural = any(g in p_lower for g in ["bachatas", "salsas", "quebraditas"])
+    es_pregunta_sugerencia = any(w in p_lower for w in palabras_sugerencia) or menciona_genero_plural
 
     # --- CONSULTA DE RECOMENDACIÓN DIRECTA EN ESTADO INICIAL ---
     if es_pregunta_sugerencia and st.session_state.step == "esperando_cancion":
         pide_mas = any(w in p_lower for w in ["mas", "más", "otras", "otros", "extra"])
 
-        if "quebradita" in p_lower or "banda" in p_lower:
+        if "quebradita" in p_lower or "quebraditas" in p_lower or "banda" in p_lower:
             gen_buscado = "Quebradita"
-        elif "bachata" in p_lower:
+        elif "bachata" in p_lower or "bachatas" in p_lower:
             gen_buscado = "Bachata"
-        elif "salsa" in p_lower:
+        elif "salsa" in p_lower or "salsas" in p_lower:
             gen_buscado = "Salsa"
         elif pide_mas and st.session_state.ultimo_genero_sugerido:
             gen_buscado = st.session_state.ultimo_genero_sugerido
         else:
             gen_buscado = st.session_state.ultimo_genero_sugerido if st.session_state.ultimo_genero_sugerido else "Quebradita"
 
-        # Guardar en contexto del estado
+        # Guardar contexto
         st.session_state.ultimo_genero_sugerido = gen_buscado
 
         mod_txt = "Pareja / Mixto"
-        if "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower:
+        if "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower or "grupos" in p_lower:
             mod_txt = "Grupo / Compañía"
-        elif "solista" in p_lower or "individual" in p_lower:
+        elif "solista" in p_lower or "solistas" in p_lower or "individual" in p_lower:
             mod_txt = "Solista / Individual"
 
         sug = SUGERENCIAS_GENERO.get(gen_buscado, [])
@@ -238,16 +241,15 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
 
         # A1: Solicitud de Top / Ranking / Mejores canciones evaluadas
         if any(w in p_lower for w in ["top", "ranking", "mejores", "tabla", "resumen de evaluadas"]):
-            if "quebradita" in p_lower or "banda" in p_lower:
+            if "quebradita" in p_lower or "quebraditas" in p_lower or "banda" in p_lower:
                 gen_top = "Quebradita"
-            elif "bachata" in p_lower:
+            elif "bachata" in p_lower or "bachatas" in p_lower:
                 gen_top = "Bachata"
-            elif "salsa" in p_lower:
+            elif "salsa" in p_lower or "salsas" in p_lower:
                 gen_top = "Salsa"
             else:
                 gen_top = genero or st.session_state.ultimo_genero_sugerido
 
-            # Filtrar historial de la sesión por el género deseado
             evaluadas_genero = [p for p in st.session_state.historial_evaluaciones if p["genero"] == gen_top]
 
             if not evaluadas_genero:
@@ -255,7 +257,6 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
                 lista_txt = "\n".join([f"{i+1}. 🎶 **{c}**" for i, c in enumerate(canciones_base)])
                 respuesta_seguimiento = f"🏆 **Top 5 Sugerido de {gen_top} (Catálogo Base):**\n\nAún no se han evaluado varias pistas de {gen_top} en esta sesión, pero aquí tienes las 5 mejores opciones recomendadas para entrenamiento:\n\n{lista_txt}"
             else:
-                # Ordenar por nivel de exigencia física descendente
                 top_ordenado = sorted(evaluadas_genero, key=lambda x: x["esfuerzo"], reverse=True)[:5]
                 filas = [f"{i+1}. 🎶 **{p['cancion']}** — Exigencia: **{p['esfuerzo']}/10** (~{p['tempo']} BPM)" for i, p in enumerate(top_ordenado)]
                 lista_txt = "\n".join(filas)
@@ -280,19 +281,19 @@ if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una 
                 respuesta_seguimiento = f"👟 **Footwork / Zapateado en '{cancion_nombre}' (Quebradita):**\n\n¡Definitivamente! El footwork aquí es **Zapateado continuo y brincos alternados**, combinados con remates al compás."
 
         # A4: Recomendaciones de canciones o sugerencias de género
-        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones", "sugerencia", "sugerencias"]):
+        elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones", "sugerencia", "sugerencias", "bachatas", "salsas", "quebraditas"]):
             gen_buscado = genero
-            if "salsa" in p_lower:
+            if "salsa" in p_lower or "salsas" in p_lower:
                 gen_buscado = "Salsa"
-            elif "bachata" in p_lower:
+            elif "bachata" in p_lower or "bachatas" in p_lower:
                 gen_buscado = "Bachata"
-            elif "quebradita" in p_lower or "banda" in p_lower:
+            elif "quebradita" in p_lower or "quebraditas" in p_lower or "banda" in p_lower:
                 gen_buscado = "Quebradita"
 
             mod_actual = eval_act['modalidad']
             if "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower or "mixto" in p_lower:
                 mod_actual = "Grupo / Compañía"
-            elif "solista" in p_lower or "individual" in p_lower:
+            elif "solista" in p_lower or "solistas" in p_lower or "individual" in p_lower:
                 mod_actual = "Solista / Individual"
             elif "pareja" in p_lower:
                 mod_actual = "Pareja"
@@ -371,9 +372,9 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
 
     # --- CASO D: PASO 2 - SELECCIÓN DE MODALIDAD ---
     elif st.session_state.step == "esperando_modalidad":
-        if "solista" in p_lower or "individual" in p_lower:
+        if "solista" in p_lower or "solistas" in p_lower or "individual" in p_lower:
             st.session_state.modalidad = "Solista / Individual"
-        elif "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower:
+        elif "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower or "grupos" in p_lower:
             st.session_state.modalidad = "Grupo / Compañía"
         else:
             st.session_state.modalidad = "Pareja"
@@ -405,7 +406,7 @@ Pega aquí abajo un **link de Spotify, YouTube** o la referencia de tu archivo.
 
                 metricas = calcular_esfuerzo_y_metricas(prediccion_ml, modalidad_txt)
 
-                # Registrar en el historial de la sesión para la función de Ranking / Top N
+                # Registrar en el historial de la sesión
                 st.session_state.historial_evaluaciones.append({
                     "cancion": analisis['cancion_formateada'],
                     "genero": prediccion_ml,
