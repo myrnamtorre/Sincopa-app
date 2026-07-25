@@ -168,7 +168,7 @@ def calcular_esfuerzo_y_metricas(prediccion_ml, modalidad):
     }
 
 # 5. MANEJO DE ENTRADA DEL CHAT
-if prompt := st.chat_input("Escribe tu duda, pregunta por footwork o ingresa otra canción..."):
+if prompt := st.chat_input("Escribe tu duda, pide recomendaciones o ingresa una canción..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -178,8 +178,28 @@ if prompt := st.chat_input("Escribe tu duda, pregunta por footwork o ingresa otr
     # Comprobar si el usuario pide explícitamente cambiar de canción
     pide_nueva_cancion = any(w in p_lower for w in ["evaluar otra", "nueva canción", "otra canción", "analizar otra", "cambiar de canción", "reset"])
 
+    # --- CONSULTA DE RECOMENDACIÓN / SUGERENCIA DIRECTA (SIN EVALUAR) ---
+    es_pregunta_sugerencia = any(w in p_lower for w in ["sugieres", "sugiere", "recomiendas", "recomienda", "opciones", "canciones de", "que canciones", "cuales canciones"])
+
+    if es_pregunta_sugerencia and st.session_state.step == "esperando_cancion":
+        gen_buscado = "Quebradita" if "quebradita" in p_lower or "banda" in p_lower else ("Bachata" if "bachata" in p_lower else "Salsa")
+        
+        mod_txt = "Pareja / Mixto"
+        if "grupo" in p_lower or "compañia" in p_lower or "compañía" in p_lower:
+            mod_txt = "Grupo / Compañía"
+        elif "solista" in p_lower or "individual" in p_lower:
+            mod_txt = "Solista / Individual"
+
+        sug = SUGERENCIAS_GENERO.get(gen_buscado, [])
+        items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug])
+        bot_reply = f"🎶 **Recomendaciones de {gen_buscado} (para {mod_txt}):**\n\nAquí tienes excelentes opciones con el tempo y cadencia ideales:\n\n{items_txt}\n\n*¿Cuál de estas te gustaría evaluar formalmente? Escribe su nombre.*"
+        
+        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+        with st.chat_message("assistant"):
+            st.markdown(bot_reply)
+
     # --- CASO A: RESPUESTAS SOBRE LA CANCIÓN ACTUAL (ESTADO EVALUADO) ---
-    if st.session_state.step == "evaluado" and not pide_nueva_cancion:
+    elif st.session_state.step == "evaluado" and not pide_nueva_cancion:
         eval_act = st.session_state.ultima_evaluacion
         genero = eval_act["genero"]
         cancion_nombre = eval_act["cancion"]
@@ -203,7 +223,7 @@ if prompt := st.chat_input("Escribe tu duda, pregunta por footwork o ingresa otr
             else:
                 respuesta_seguimiento = f"👟 **Footwork / Zapateado en '{cancion_nombre}' (Quebradita):**\n\n¡Definitivamente! El footwork aquí es **Zapateado continuo y brincos alternados**, combinados con remates al compás."
 
-        # A3: Recomendaciones de canciones o sugerencias de género (con actualización dinámica de modalidad)
+        # A3: Recomendaciones de canciones o sugerencias de género
         elif any(w in p_lower for w in ["similar", "parecida", "recomienda", "sugieres", "sugiere", "opciones", "mismo estilo", "canciones", "cancion", "que canciones"]):
             gen_buscado = genero
             if "salsa" in p_lower:
