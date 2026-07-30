@@ -91,7 +91,7 @@ def analizar_pista(query):
     es_link = any(domain in q for domain in ["spotify.com", "youtube.com", "youtu.be", "drive.google", ".mp3", ".wav"])
     hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
 
-    tokens_quebradita = ["quebradita", "quebraditas", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", "tucanes"]
+    tokens_quebradita = ["quebradita", "quebraditas", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", "tucanes", "vampiro"]
     tokens_bachata = ["bachata", "bachatas", "sensual", "bolero", "slow", "suave", "romantica", "romeo", "aventura", "prince", "royce", "guerra"]
     tokens_salsa = ["salsa", "salsas", "mambo", "guaguanco", "son", "timba", "marc anthony", "lavoe", "colon", "arroyo"]
 
@@ -105,7 +105,7 @@ def analizar_pista(query):
         tempo_base = 178.0 + (hash_val % 20)
         secciones_base = 9
     else:
-        # Pista genérica por defecto si no hay coincidencia directa de género
+        # Pista genérica (estimación por audio)
         tempo_base = 135.0 + (hash_val % 50)
         secciones_base = 8
 
@@ -167,7 +167,7 @@ if prompt := st.chat_input("Escribe una canción, pide sugerencias o haz una dud
     # B) Evaluación Directa e Inmediata de Canción
     else:
         with st.chat_message("assistant"):
-            with st.spinner("🤖 Analizando ritmo y métricas..."):
+            with st.spinner("🤖 Analizando ritmo y clasificando género..."):
                 time.sleep(0.3)
                 analisis = analizar_pista(prompt)
 
@@ -177,7 +177,7 @@ if prompt := st.chat_input("Escribe una canción, pide sugerencias o haz una dud
             tempo_val = analisis["tempo"]
             secciones_val = analisis["secciones"]
 
-            # Clasificación ML
+            # Clasificación ML del Género
             if modelo is not None:
                 df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
                 prediccion_ml = modelo.predict(df_in)[0]
@@ -197,23 +197,24 @@ if prompt := st.chat_input("Escribe una canción, pide sugerencias o haz una dud
             sug_rel = SUGERENCIAS_GENERO.get(prediccion_ml, [])[:3]
             sug_txt = ", ".join([f"*{s}*" for s in sug_rel])
 
-            reply = f"""🎶 **Resultados para:** **{analisis['cancion_formateada']}**
-📌 **Género Estimado:** **{prediccion_ml}** (~{tempo_val} BPM)
+            reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
+🏷️ **Género Clasificado:** **{prediccion_ml}** 
+⏱️ **Tempo Estimado:** ~{tempo_val} BPM
 
 ---
 
-### 📊 Evaluaciones por Modalidad de Baile:
+### 📊 Exigencia Física por Modalidad de Baile:
 
-* 👫 **Si lo bailas en Pareja:** Exigencia de **{mm['pareja']} / 10** (Ideal para trabajo de marco y conexión).
-* 👯‍♀️ **Si lo bailas en Grupo / Compañía:** Exigencia de **{mm['grupo']} / 10** (Exige alta limpieza en bloques y simetría).
-* 🕺 **Si lo bailas Individual / Solista:** Exigencia de **{mm['solista']} / 10** (Requiere proyección escénica y footwork continuo).
+* 👫 **Si lo bailas en Pareja:** Exigencia de **{mm['pareja']} / 10** (Ideal para marco y conexión).
+* 👯‍♀️ **Si lo bailas en Grupo / Compañía:** Exigencia de **{mm['grupo']} / 10** (Exige alta limpieza en bloques).
+* 🕺 **Si lo bailas Individual / Solista:** Exigencia de **{mm['solista']} / 10** (Requiere proyección y footwork continuo).
 
 {mm['recomendacion_estilo']}
 
 ---
 
-💡 *Pistas similares que te podrían gustar:* {sug_txt}.
-*(Puedes preguntarme sobre vestuario, minutos de footwork para este tema o probar con otra canción)*.
+💡 *Otras canciones de {prediccion_ml} que podrías probar:* {sug_txt}.
+*(Puedes preguntarme sobre calzado/vestuario, minutos de footwork o escribir otra canción)*.
 """
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
