@@ -133,7 +133,7 @@ def analizar_pista(query):
     elif any(w in cadena_eval for w in tokens_bachata):
         tempo_base = 122.0 + (hash_val % 12)
         secciones_base = 7
-    elif any(w in cadena_eval for w in cadena_eval for w in tokens_salsa):
+    elif any(w in cadena_eval for w in tokens_salsa):
         tempo_base = 178.0 + (hash_val % 20)
         secciones_base = 9
     else:
@@ -153,18 +153,34 @@ def obtener_metricas_multi_modalidad(genero_predicho):
     if genero_predicho == "Quebradita":
         base = 8.5
         recom = "⭐ **Sugerencia:** ¡Ideal para **Grupo / Compañía** por el impacto visual de los lanzamientos y bloques sincronizados!"
+        ejercicios = (
+            "* 🦘 **Pliometría & Potencia:** Jump squats y salto de cuerda rápido (3 series x 45 seg) para resistir el rebote alto.\n"
+            "* 🦶 **Fuerza de Tobillo y Gemelos:** Elevaciones de talón en borde de escalón y trabajo de estabilidad de tobillos para zapateado continuo.\n"
+            "* 🫁 **Resistencia Cardiovascular HIIT:** Intervalos de alta intensidad de 30s esfuerzo / 15s descanso para aguantar el ritmo vertiginoso."
+        )
     elif genero_predicho == "Salsa":
         base = 7.0
         recom = "⭐ **Sugerencia:** Funciona excelente tanto en **Pareja** (turn patterns) como en **Solista** para lucir Shines/Footwork."
+        ejercicios = (
+            "* ⚡ **Agilidad de Pies (Footwork):** Trabajo en escalera de agilidad (in-out rápidos) para velocidad en shines y cambios de peso.\n"
+            "* 🔄 **Estabilidad de Core & Giros:** Planchas dinámicas con rotación y giros spot focalizados para mantener el eje en secuencias rápidas.\n"
+            "* 🦵 **Movilidad de Cadera:** Ejercicios de disociación pélvica y fortalecimiento de abductores/aductores."
+        )
     else: # Bachata
         base = 5.0
         recom = "⭐ **Sugerencia:** Perfecta para **Pareja** por la conexión y fluidez en ondas/sensual, o **Solista** para disociación."
+        ejercicios = (
+            "* 🌊 **Disociación Corporal:** Trabajo de movilidad de columna, aislación torácica y ondas de torso frente al espejo.\n"
+            "* 🧘 **Flexibilidad & Control:** Estiramientos profundos de isquiotibiales y movilidad de cadera para ondas suaves sin tensión muscular.\n"
+            "* 🛡️ **Fuerza de Postura (Marco):** Remo con liga/mancuerna e isometría de deltoides para sostener el marco de pareja sin fatigar hombros."
+        )
 
     return {
         "pareja": round(base, 1),
         "grupo": round(min(10.0, base + 1.5), 1),
         "solista": round(min(10.0, base + 1.0), 1),
-        "recomendacion_estilo": recom
+        "recomendacion_estilo": recom,
+        "ejercicios_recomendados": ejercicios
     }
 
 # 5. ATENCIÓN DE INTERACCIONES EN EL CHAT
@@ -178,7 +194,7 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
     # A) DETECCIÓN DE PREGUNTAS DE SEGUIMIENTO (VESTUARIO / CALZADO / ENTRENAMIENTO)
     palabras_vestuario = ["vestuario", "ropa", "ropa sugerida", "que me pongo", "qué me pongo", "outfit", "traje"]
     palabras_calzado = ["calzado", "zapatos", "tenis", "zapatillas", "suela"]
-    palabras_entrenamiento = ["ejercicio", "entrenamiento", "rutina", "preparacion", "preparación", "footwork", "pasos"]
+    palabras_entrenamiento = ["ejercicio", "ejercicios", "entrenamiento", "rutina", "preparacion", "preparación", "footwork", "pasos", "aguantar", "fisico", "físico"]
 
     es_pregunta_vestuario = any(w in p_lower for w in palabras_vestuario)
     es_pregunta_calzado = any(w in p_lower for w in palabras_calzado)
@@ -188,6 +204,7 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
         eval_previa = st.session_state.ultima_evaluacion
         gen_previo = eval_previa["genero"]
         cancion_previa = eval_previa["cancion"]
+        mm_prev = obtener_metricas_multi_modalidad(gen_previo)
 
         if es_pregunta_vestuario:
             if gen_previo == "Quebradita":
@@ -210,15 +227,14 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
             reply = f"👠 **Calzado Recomendado para *{cancion_previa}* ({gen_previo}):**\n\n{recom_c}"
 
         elif es_pregunta_entrenamiento:
-            reply = f"🏋️ **Enfoque de Entrenamiento para *{cancion_previa}* ({gen_previo}):**\n\n* **Calentamiento:** 10 min de movilidad articular en tobillos y cadera.\n* **Ejercicio Clave:** 3 series de pliometría/saltos (si es Quebradita) o disociación de torso/cadera (si es Bachata/Salsa).\n* **Bloque Coreográfico:** Trabajar secuencias de 8 tiempos al 80% del tempo real antes de montar a velocidad normal."
+            reply = f"🏋️ **Acondicionamiento Físico Recomendado para *{cancion_previa}* ({gen_previo}):**\n\n{mm_prev['ejercicios_recomendados']}"
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
         with st.chat_message("assistant"):
             st.markdown(reply)
 
-    # B) DETECCIÓN DE SOLICITUD DE SUGERENCIAS CON FILTROS DE VELOCIDAD/ESTILO (LENTAS, RÁPIDAS, SENSUALES, ETC.)
+    # B) DETECCIÓN DE SOLICITUD DE SUGERENCIAS CON FILTROS
     elif any(w in p_lower for w in ["sugerencia", "sugerencias", "sugieres", "sugiere", "recomienda", "opciones", "bachata", "bachatas", "salsa", "salsas", "quebradita", "quebraditas", "ideas", "otras", "mas", "más"]):
-        # Identificar género
         if "quebradita" in p_lower or "quebraditas" in p_lower:
             gen = "Quebradita"
         elif "salsa" in p_lower or "salsas" in p_lower:
@@ -230,7 +246,6 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
 
         st.session_state.ultimo_genero_sugerido = gen
 
-        # Identificar velocidad o cualidad
         es_lenta = any(w in p_lower for w in ["lenta", "lentas", "suave", "suaves", "romantica", "románticas", "sensual", "despacio"])
         es_rapida = any(w in p_lower for w in ["rapida", "rápidas", "rapidas", "movida", "movidas", "prendida", "prendidas", "fast", "fuerte"])
 
@@ -243,18 +258,15 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
             sug_base = cat_dict["rapidas"].copy()
             tag_vel = "Rápidas / Intensa Métrica"
         else:
-            # Si no especifica o no hay categoría exacta, junta todas las disponibles
             sug_base = []
             for k, lista in cat_dict.items():
                 sug_base.extend(lista)
             tag_vel = "Variadas"
 
-        # Excluir última canción evaluada si aplica
         if st.session_state.ultima_evaluacion:
             cancion_previa = st.session_state.ultima_evaluacion["cancion"].lower()
             sug_base = [s for s in sug_base if cancion_previa not in s.lower()]
 
-        # Mezclar ligeramente si pide más u otras
         if any(w in p_lower for w in ["mas", "más", "otras", "diferentes", "nuevas"]):
             random.seed(len(p_lower) + int(time.time() % 100))
             random.shuffle(sug_base)
@@ -295,7 +307,6 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
             }
             st.session_state.historial_evaluaciones.append(st.session_state.ultima_evaluacion)
 
-            # Obtener lista plana para sugerencias contextuales al final de la evaluación
             cat_prev = SUGERENCIAS_GENERO.get(prediccion_ml, {})
             sug_planas = []
             for k, v in cat_prev.items():
@@ -312,7 +323,7 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
 
 ### 📊 Exigencia Física por Modalidad de Baile:
 
-* 👫 **Si lo bailas en Pareja:** Exigencia de **{mm['pareja']} / 10** (Ideal para trabajo de marco y conexión).
+* 👫 **Si lo bailas en Pareja:** Exigencia de **{mm['pareja']} / 10** (Ideal para marco y conexión).
 * 👯‍♀️ **Si lo bailas en Grupo / Compañía:** Exigencia de **{mm['grupo']} / 10** (Exige alta limpieza en bloques y simetría).
 * 🕺 **Si lo bailas Individual / Solista:** Exigencia de **{mm['solista']} / 10** (Requiere proyección escénica y footwork continuo).
 
@@ -320,8 +331,13 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
 
 ---
 
+### 🏋️ Prep Física & Ejercicios para Aguantar la Pista:
+{mm['ejercicios_recomendados']}
+
+---
+
 💡 *Otras opciones sugeridas de {prediccion_ml}:* {sug_txt}.
-*(Puedes preguntarme sobre calzado, vestuario, minutos de footwork o pedir canciones específicas como "salsas lentas")*.
+*(Puedes preguntarme sobre calzado, vestuario o pedir listas como "salsas lentas")*.
 """
 
         st.session_state.messages.append({"role": "assistant", "content": reply})
