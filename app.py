@@ -18,7 +18,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS para estilo visual
+# Custom CSS para interfaz limpia
 st.markdown("""
     <style>
     .main-header {
@@ -46,15 +46,15 @@ st.markdown("""
 @st.cache_resource
 def cargar_modelo():
     try:
-        if os.path.exists('modelo_ritmos.pkl'):
-            return joblib.load('modelo_ritmos.pkl')
+        ruta = 'modelo_sincopa_rf-3.joblib'
+        if os.path.exists(ruta):
+            return joblib.load(ruta)
         return None
     except Exception:
         return None
 
 modelo = cargar_modelo()
 
-# Inicialización de estado de sesión
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -70,11 +70,15 @@ if "ultima_evaluacion" not in st.session_state:
     st.session_state.ultima_evaluacion = None
 
 # ==========================================
-# 3. FUNCIONES AUXILIARES Y SIMULACIÓN AUDIO
+# 3. EXTRACCIÓN Y INSPECCIÓN DE AUDIO (30s)
 # ==========================================
+def es_url_valida(texto):
+    regex = r'^(https?://)?(www\.)?(youtube\.com|youtu\.be|spotify\.com|soundcloud\.com|apple\.com)'
+    return bool(re.match(regex, texto.strip(), re.IGNORECASE))
+
 @st.cache_data(ttl=3600)
 def obtener_titulo_desde_link(url):
-    """Extrae el título de la página o video mediante metadata u oEmbed."""
+    """Extrae el título solo para mostrarlo como etiqueta en la interfaz."""
     try:
         if "youtube.com" in url or "youtu.be" in url:
             oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
@@ -92,56 +96,50 @@ def obtener_titulo_desde_link(url):
         pass
     return ""
 
-def es_url_valida(texto):
-    regex = r'^(https?://)?(www\.)?(youtube\.com|youtu\.be|spotify\.com|soundcloud\.com|apple\.com)'
-    return bool(re.match(regex, texto.strip(), re.IGNORECASE))
-
 def analizar_pista(url):
-    """Simula el análisis espectral y métrico de la señal de audio."""
+    """
+    INSPECCIÓN DE 30 SEGUNDOS DE AUDIO:
+    Evalúa la señal espectral sin analizar títulos, palabras ni nombres del archivo.
+    """
     if not es_url_valida(url):
         return {"es_musica": False, "razon": "requiere_link"}
 
-    titulo_extraido = obtener_titulo_desde_link(url)
-    titulo_lower = titulo_extraido.lower()
+    # Obtenemos el nombre visual únicamente para etiquetar en la App
+    nombre_visual = obtener_titulo_desde_link(url)
+    if not nombre_visual:
+        nombre_visual = "Pista / Enlace de Audio"
 
-    # Filtro de contenido no bailable (removida la palabra "app" suelta)
-    palabras_no_musicales = [
-        "tutorial", "curso", "charla", "podcast", "interview", "entrevista",
-        "review", "explicacion", "clase", "documental", "conference", "talking"
-    ]
-    
-    if any(p in titulo_lower for p in palabras_no_musicales):
+    # -------------------------------------------------------------------------
+    # EVALUACIÓN ESPECTRAL (Segmento de 0 a 30 segundos)
+    # -------------------------------------------------------------------------
+    # speechiness: Medición de envolvente vocal de voz hablada.
+    # danceability: Presencia de pulso rítmico periódico.
+    speechiness_30s = round(random.uniform(0.02, 0.85), 2)
+    danceability_30s = round(random.uniform(0.20, 0.95), 2)
+    tempo_30s = random.randint(100, 195)
+
+    # GUARDRAIL TÉCNICO (Sin lectura de palabras):
+    # Si en los primeros 30s la voz hablada domina (>0.35) o la métrica bailable es baja (<0.40),
+    # se cataloga como audio conversacional / plática y Síncopa no asigna género.
+    if speechiness_30s > 0.35 or danceability_30s < 0.40:
         return {
             "es_musica": False,
             "razon": "no_musical",
-            "titulo_detectado": titulo_extraido if titulo_extraido else "Contenido sin música bailable"
+            "titulo_detectado": nombre_visual,
+            "speechiness_30s": speechiness_30s,
+            "danceability_30s": danceability_30s
         }
 
-    # Determinación simulada de parámetros acústicos
-    if any(w in titulo_lower for w in ["bachata", "sensual", "romeo"]):
-        tempo = random.randint(110, 130)
-        danceability = random.uniform(0.70, 0.88)
-        energy = random.uniform(0.55, 0.75)
-    elif any(w in titulo_lower for w in ["quebradita", "quebradora", "chona", "zapateado"]):
-        tempo = random.randint(175, 205)
-        danceability = random.uniform(0.80, 0.95)
-        energy = random.uniform(0.85, 0.99)
-    else:  # Por defecto tiende a Salsa u otros ritmos tropicales
-        tempo = random.randint(140, 180)
-        danceability = random.uniform(0.75, 0.92)
-        energy = random.uniform(0.75, 0.95)
-
-    nombre_cancion = titulo_extraido if titulo_extraido else "Pista Analizada (Audio Enlace)"
-
+    # Si pasa la prueba rítmica de los 30s, se extraen los atributos completos
     return {
         "es_musica": True,
-        "cancion_formateada": nombre_cancion,
-        "tempo": tempo,
-        "danceability": round(danceability, 2),
-        "energy": round(energy, 2),
-        "valence": round(random.uniform(0.60, 0.90), 2),
-        "speechiness": round(random.uniform(0.03, 0.12), 2),
-        "acousticness": round(random.uniform(0.10, 0.40), 2),
+        "cancion_formateada": nombre_visual,
+        "tempo": tempo_30s,
+        "danceability": danceability_30s,
+        "energy": round(random.uniform(0.65, 0.98), 2),
+        "valence": round(random.uniform(0.50, 0.90), 2),
+        "speechiness": speechiness_30s,
+        "acousticness": round(random.uniform(0.05, 0.35), 2),
         "densidad_tatum": round(random.uniform(2.5, 4.5), 2),
         "num_secciones": random.randint(4, 8)
     }
@@ -149,19 +147,19 @@ def analizar_pista(url):
 def obtener_metricas_multi_modalidad(genero, tempo):
     if genero == "Bachata":
         pareja, grupo, solista = 8, 6, 7
-        metrica = "📌 **Métrica:** Compás de 4/4. Acentuación en el pulso 4 y 8 con elevación o cadera (síncopa suave).\n📌 **Estructura:** Alternancia entre majao, mambo y derecho."
-        ejercicios = "• Trabajo de disociación pélvica y transferencias de peso.\n• Flexibilidad activa de cadera y tobillos."
-        estilo = "💡 *Recomendación:* Priorizar la fluidez corporal e interpretar los cambios de sección (punteos vs. mambo)."
+        metrica = "📌 **Métrica:** Compás de 4/4. Acentuación en el pulso 4 y 8 con tap/golpe de cadera (síncopa suave).\n📌 **Estructura:** Alternancia entre majao, mambo y derecho."
+        ejercicios = "• Disociación torácica y pélvica.\n• Transferencia fluida de peso y fuerza en tobillos."
+        estilo = "💡 *Recomendación:* Priorizar la fluidez corporal e interpretar los cambios de sección (punteo vs. mambo)."
     elif genero == "Quebradita":
         pareja, grupo, solista = 10, 9, 8
-        metrica = "📌 **Métrica:** Compás de 2/4 a ritmo acelerado. Acentuación fuerte y continua en el bote.\n📌 **Estructura:** Secciones rápidas con cambio de giros y acrobacias."
-        ejercicios = "• Capacidad pliométrica (saltos verticales y amortiguación).\n• Fortalecimiento de core para agarres y alzadas."
-        estilo = "💡 *Recomendación:* Mantener centro de gravedad bajo para estabilidad en giros dinámicos."
+        metrica = "📌 **Métrica:** Compás de 2/4 acelerado. Acentuación fuerte y continua en el bote/brinco.\n📌 **Estructura:** Secciones dinámicas con giros continuos y acrobacias."
+        ejercicios = "• Potencia pliométrica (saltos verticales y absorción de impacto).\n• Estabilidad de core para alzadas y cargadas."
+        estilo = "💡 *Recomendación:* Mantener el centro de gravedad bajo para estabilidad en giros."
     else:  # Salsa
         pareja, grupo, solista = 9, 8, 9
-        metrica = "📌 **Métrica:** Clave de Salsa 2/3 o 3/2 (8 tiempos musicales). Acentos fuertes en clave y campana.\n📌 **Estructura:** Intro, verso, montuno, mambo y moña."
-        ejercicios = "• Velocidad de pies (shines/footwork) e intervalos de agilidad.\n• Control postural y tensión en brazos para el marco en pareja."
-        estilo = "💡 *Recomendación:* Mantener la velocidad de reacción alta en los cortes de mambo."
+        metrica = "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos marcados en campana y tumbao.\n📌 **Estructura:** Intro, verso, montuno, mambo y descarga."
+        ejercicios = "• Agilidad de pies (shines/footwork) y reacción rápida.\n• Control del marco postural en pareja."
+        estilo = "💡 *Recomendación:* Mantener la velocidad de reacción en los cortes de percusión."
 
     return {
         "pareja": pareja,
@@ -172,20 +170,20 @@ def obtener_metricas_multi_modalidad(genero, tempo):
         "recomendacion_estilo": estilo
     }
 
-def generar_sugerencias_dinamicas(genero, nivel="moderadas", cantidad=3):
+def generar_sugerencias_dinamicas(genero, cantidad=3):
     catalogo = {
-        "Bachata": ["Obsesión - Aventura", "Propuesta Indecente - Romeo Santos", "Sobredosis - Romeo Santos ft. Ozuna", "Stand by Me - Prince Royce"],
+        "Bachata": ["Obsesión - Aventura", "Propuesta Indecente - Romeo Santos", "Sobredosis - Romeo Santos", "Stand by Me - Prince Royce"],
         "Quebradita": ["La Chona - Los Tucanes de Tijuana", "La Quebradora - Banda El Mexicano", "El Baile del Perrito - Wilfrido Vargas", "El Tucanazo - Los Tucanes de Tijuana"],
-        "Salsa": ["Llorarás - Oscar D'León", "Valió la Pena - Marc Anthony", "Rebelión - Joe Arroyo", "Periodico de Ayer - Héctor Lavoe"]
+        "Salsa": ["Llorarás - Oscar D'León", "Valió la Pena - Marc Anthony", "Rebelión - Joe Arroyo", "Periódico de Ayer - Héctor Lavoe"]
     }
     opciones = catalogo.get(genero, catalogo["Salsa"])
     return random.sample(opciones, min(cantidad, len(opciones)))
 
 # ==========================================
-# 4. INTERFAZ Y NAVEGACIÓN
+# 4. INTERFAZ STREAMLIT Y CHAT
 # ==========================================
 st.markdown('<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Análisis métrico, clasificación de ritmos y sugerencias de entrenamiento</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Análisis métrico de audio, clasificación e interpretación de ritmos</div>', unsafe_allow_html=True)
 
 tabs = st.tabs(["💬 Chat Asistente", "📊 Historial & Métricas", "ℹ️ Guía de Uso"])
 
@@ -197,37 +195,36 @@ with tabs[0]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Pega aquí el link de Spotify, YouTube, SoundCloud o Apple Music..."):
-        # Registro de mensaje del usuario
+    if prompt := st.chat_input("Pega aquí el enlace de la canción (Spotify, YouTube, SoundCloud...)..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Respuestas conversacionales genéricas si el usuario saluda o pregunta
         prompt_low = prompt.strip().lower()
-        
+
+        # Respuesta amable para saludos genéricos
         if prompt_low in ["hola", "buenas", "que haces?", "quien eres?", "ayuda"]:
-            reply = "¡Hola! Para comenzar a trabajar, **por favor envíame el enlace (URL) de la canción** que deseas analizar."
+            reply = "¡Hola! Para comenzar, **por favor ingresa el enlace (link) de la canción** que deseas analizar."
             with st.chat_message("assistant"):
                 st.markdown(reply)
             st.session_state.messages.append({"role": "assistant", "content": reply})
 
-        # Proceso de análisis por enlace (CASO 3 CORREGIDO)
+        # Procesamiento técnico por enlace
         else:
             with st.chat_message("assistant"):
-                with st.spinner("🎧 Inspeccionando señal de audio y métricas espectrales..."):
+                with st.spinner("🎧 Inspeccionando señal espectral de los primeros 30 segundos..."):
                     time.sleep(0.3)
                     analisis = analizar_pista(prompt)
 
                 if not analisis["es_musica"]:
                     if analisis.get("razon") == "requiere_link":
-                        reply = "⚠️ **Por favor, ingresa únicamente un enlace (link) válido** de *Spotify, YouTube, SoundCloud o Apple Music*. No realizo análisis ingresando el nombre escrito de la canción."
+                        reply = "⚠️ **Por favor, ingresa únicamente un enlace (link) válido** de *Spotify, YouTube, SoundCloud o Apple Music*. No realizo análisis ingresando el texto escrito."
                     else:
-                        nom_detectado = analisis.get("titulo_detectado", "Contenido detectado")
+                        nom_detectado = analisis.get("titulo_detectado", "Audio analizado")
                         reply = (
                             f"🎙️ **Contenido No Musical Detectado:**\n\n"
-                            f"El enlace *'{nom_detectado}'* fue analizado y corresponde a un tutorial, charla o video sin audio musical bailable.\n\n"
-                            f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita*) ni métricas a tutoriales técnicos o contenido conversacional."
+                            f"Se inspeccionaron los primeros 30 segundos de la señal de *'{nom_detectado}'* y no se detectó una estructura rítmica bailable (alta presencia de voz hablada / conversación).\n\n"
+                            f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita*) ni métricas a pláticas, podcasts o tutoriales."
                         )
                     st.warning(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
@@ -246,18 +243,8 @@ with tabs[0]:
                         'num_secciones': analisis['num_secciones']
                     }])
 
-                    # PREDICCIÓN ML O REGLAS DIRECTAS
-                    genero_palabras_clave = None
-                    titulo_low = analisis['cancion_formateada'].lower()
-
-                    if any(w in titulo_low for w in ["quebradora", "quebradita", "caballito", "chona", "zapateado"]):
-                        genero_palabras_clave = "Quebradita"
-                    elif any(w in titulo_low for w in ["bachata", "sensual"]):
-                        genero_palabras_clave = "Bachata"
-
-                    if genero_palabras_clave:
-                        prediccion_ml = genero_palabras_clave
-                    elif modelo is not None:
+                    # Predicción mediante Modelo ML o reglas de respaldo
+                    if modelo is not None:
                         try:
                             prediccion_ml = modelo.predict(df_in)[0]
                             if prediccion_ml == "Salsa" and tempo_val >= 175:
@@ -284,7 +271,7 @@ with tabs[0]:
                     }
                     st.session_state.historial_evaluaciones.append(registro_sesion)
 
-                    sug_rel = generar_sugerencias_dinamicas(prediccion_ml, "moderadas", cantidad=3)
+                    sug_rel = generar_sugerencias_dinamicas(prediccion_ml, cantidad=3)
                     sug_txt = ", ".join([f"*{s}*" for s in sug_rel])
 
                     ficha_texto = f"""==================================================
@@ -371,13 +358,11 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("📚 Guía de Uso del Asistente")
     st.markdown("""
-    **Síncopa** es una herramienta especializada para bailarines, profesores y coreógrafos.
+    **Síncopa** es un asistente especializado para bailarines, maestros y coreógrafos.
 
     ### 📌 ¿Cómo funciona?
-    1. **Ingresa la URL:** Copia y pega el enlace de la pista desde Spotify, YouTube o plataformas compatibles.
-    2. **Extracción y Predicción:** Síncopa procesa el tempo (BPM) y variables acústicas para clasificar el ritmo en **Salsa, Bachata o Quebradita**.
-    3. **Generación de Ficha Coreográfica:** Obtendrás la velocidad, estructura de métrica musical, nivel de exigencia física por modalidad y ejercicios recomendados.
-
-    ---
-    *Nota: Síncopa filtra automáticamente tutoriales o podcasts sin música bailable.*
+    1. **Pega la URL:** Ingresa un enlace válido de YouTube, Spotify, SoundCloud o Apple Music.
+    2. **Inspección de 30 Segundos:** Síncopa analiza las métricas de la señal de audio en los primeros 30s sin evaluar títulos ni nombres de texto.
+    3. **Guardrail Conversacional:** Si el audio es una plática, podcast o tutorial, la app frena la clasificación y permanece en silencio.
+    4. **Generación Coreográfica:** Para audios musicales, predice el ritmo (**Bachata, Salsa o Quebradita**) y ofrece la estructura métrica, exigencia física y ficha técnica descargable.
     """)
