@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import random
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="Síncopa • Asistente Coreográfico IA",
@@ -64,14 +65,15 @@ if "messages" not in st.session_state:
                 "👋 **¡Hola! Soy Síncopa, tu asistente de Inteligencia Artificial especializado en preparación coreográfica.**\n\n"
                 "Para aprovechar al máximo nuestra conversación, ten en cuenta lo que puedo hacer por ti:\n\n"
                 "### 🎯 ¿Qué puedes pedirme?:\n"
-                "1. **Análisis de Canción o Link:** Ingresa el título o pega un enlace de *Spotify, YouTube, SoundCloud o Apple Music* para clasificar su género (**Bachata, Salsa o Quebradita**) y calcular su tempo estimado (BPM).\n"
+                "1. **Análisis de Canción por Enlace:** Pega exclusivamente un **enlace (link)** de *Spotify, YouTube, SoundCloud o Apple Music* para clasificar su género (**Bachata, Salsa o Quebradita**) y calcular su tempo estimado (BPM).\n"
                 "2. **Exigencia Física & Modalidad:** Descubre el nivel de exigencia física (1 a 10) según el tempo de la pista en **Pareja, Grupo/Compañía o Solista**.\n"
                 "3. **Acondicionamiento Físico:** Pídeme rutinas de ejercicio específicas (pliometría, disociación, agilidad) para aguantar el ritmo de la pista.\n"
                 "4. **Recomendaciones de Vestuario y Calzado:** Pregúntame qué ropa o calzado es el ideal para el género analizado.\n"
                 "5. **Sugerencias Dinámicas de Canciones:** Pídeme listas personalizadas (ej. *'bachatas lentas, salsas rápidas y quebraditas para principiantes'*).\n\n"
                 "--- \n"
                 "### 🛑 Límites del servicio:\n"
-                "* ⚠️ *No se procesan archivos locales subidos en formato audio (.mp3/.wav).* Por favor comparte el enlace o título.\n"
+                "* ⚠️ **Importante:** Para analizar canciones específicas, **ingresa únicamente enlaces/links de audio o video**. Los nombres en texto plano no serán procesados.\n"
+                "* ⚠️ *No se procesan archivos locales subidos en formato audio (.mp3/.wav).* Por favor comparte el enlace.\n"
                 "* ⚠️ *Especializado exclusivamente en género tropical y latino:* **Bachata, Salsa y Quebradita**.\n"
                 "* ⚠️ *Las métricas y tempos (BPM) son estimaciones algorítmicas de orientación pedagógica y entrenamiento.*"
             )
@@ -131,18 +133,18 @@ def analizar_pista(query):
     if any(t in q for t in tokens_no_musica):
         return {"es_musica": False, "razon": "Contenido No Musical / Voz Hablada"}
 
-    es_link = any(domain in q for domain in ["spotify.com", "youtube.com", "youtu.be", "soundcloud.com", "apple.com", "drive.google", ".mp3", ".wav"])
+    es_link = any(domain in q for domain in ["spotify.com", "youtube.com", "youtu.be", "soundcloud.com", "apple.com", "drive.google", ".mp3", ".wav", "http://", "https://"])
     
-    if es_link:
-        match = re.search(r'https?://[^\s]+', query)
-        url_detectada = match.group(0) if match else query
-        cancion_nombre = obtener_titulo_desde_link(url_detectada)
-    else:
-        cancion_nombre = query.title()
+    # RESTRICCIÓN: Si NO es un enlace, indicamos que se requiere URL
+    if not es_link:
+        return {"es_musica": False, "razon": "requiere_link"}
+
+    match = re.search(r'https?://[^\s]+', query)
+    url_detectada = match.group(0) if match else query
+    cancion_nombre = obtener_titulo_desde_link(url_detectada)
 
     hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
 
-    # Tokens ampliados para detección estricta por palabras clave
     tokens_quebradita = [
         "quebradita", "quebraditas", "quebradora", "banda", "zapateado", "brinco", 
         "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", 
@@ -160,7 +162,6 @@ def analizar_pista(query):
 
     cadena_eval = (query + " " + cancion_nombre).lower()
 
-    # Evaluación de prioridades
     if any(w in cadena_eval for w in tokens_quebradita):
         genero_forzado = "Quebradita"
         tempo_base = 230.0 + (hash_val % 30)
@@ -188,7 +189,6 @@ def analizar_pista(query):
     }
 
 def obtener_metricas_multi_modalidad(genero_predicho, tempo):
-    """Calcula la exigencia física dinámicamente según los BPM reales de la canción."""
     if tempo < 130:
         factor_bpm = 4.5 + (tempo - 90) * 0.05
     elif tempo < 180:
@@ -297,11 +297,13 @@ def procesar_sub_peticion(sub_prompt):
 tab_chat, tab_historial = st.tabs(["💬 Asistente Conversacional", "📊 Historial de Análisis"])
 
 with tab_chat:
+    # Renderizado de mensajes del historial
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Escribe una canción, pega un link o pide listas (ej. bachatas lentas, salsas rápidas)..."):
+    # Entrada de texto del usuario
+    if prompt := st.chat_input("Pega un link de Spotify/YouTube o pide listas de canciones..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -316,6 +318,7 @@ with tab_chat:
         es_pregunta_calzado = any(w in p_lower for w in palabras_calzado)
         es_pregunta_entrenamiento = any(w in p_lower for w in palabras_entrenamiento)
 
+        # CASO 1: Preguntas sobre la evaluación previa
         if (es_pregunta_vestuario or es_pregunta_calzado or es_pregunta_entrenamiento) and st.session_state.ultima_evaluacion:
             eval_previa = st.session_state.ultima_evaluacion
             gen_previo = eval_previa["genero"]
@@ -350,6 +353,7 @@ with tab_chat:
             with st.chat_message("assistant"):
                 st.markdown(reply)
 
+        # CASO 2: Solicitud de Sugerencias / Listas (Se agrega AVISO DE INGRESAR SOLO LINKS)
         elif any(w in p_lower for w in ["sugerencia", "sugerencias", "sugieres", "sugiere", "recomienda", "opciones", "lista", "listas", "bachata", "bachatas", "salsa", "salsas", "quebradita", "quebraditas"]):
             partes = re.split(r',| y | e ', p_lower)
             bloques_respuesta = []
@@ -361,27 +365,31 @@ with tab_chat:
                         bloques_respuesta.append(f"### 🎶 {gen} ({etiqueta}):\n{items}")
 
             if bloques_respuesta:
-                reply = "¡Claro! Aquí tienes tus sugerencias dinámicas personalizadas:\n\n" + "\n\n".join(bloques_respuesta) + "\n\n*¿Te gustaría analizar alguna de estas en detalle? Solo escribe su nombre o pega su enlace.*"
+                aviso_link = "\n\n> ⚠️ **Recordatorio importante:** Para que pueda analizar en detalle cualquiera de estas canciones, **por favor pega únicamente su enlace (link) de YouTube, Spotify o SoundCloud**. No procesamos nombres escritos en texto plano."
+                reply = "¡Claro! Aquí tienes tus sugerencias dinámicas personalizadas:\n\n" + "\n\n".join(bloques_respuesta) + aviso_link
             else:
-                reply = "🎶 No encontré sugerencias exactas para esa combinación, pero puedes pedirme listas como *'bachatas lentas'*, *'salsas para principiantes'* o *'quebraditas rápidas'*."
+                reply = "🎶 No encontré sugerencias exactas para esa combinación, pero puedes pedirme listas como *'bachatas lentas'*, *'salsas para principiantes'* o *'quebraditas rápidas'*. Recordando ingresar el link de la canción que desees analizar."
 
             st.session_state.messages.append({"role": "assistant", "content": reply})
             with st.chat_message("assistant"):
                 st.markdown(reply)
 
+        # CASO 3: Análisis de pista
         else:
             with st.chat_message("assistant"):
-                with st.spinner("🤖 Analizando pista y clasificando género..."):
+                with st.spinner("🤖 Validando enlace y analizando pista..."):
                     time.sleep(0.3)
                     analisis = analizar_pista(prompt)
 
             if not analisis["es_musica"]:
-                reply = "⚠️ La entrada parece ser un contenido hablado o no musical. Por favor, ingresa el nombre de una canción o pega un enlace de audio/video."
+                if analisis.get("razon") == "requiere_link":
+                    reply = "⚠️ **Por favor, ingresa únicamente un enlace (link) válido** de *Spotify, YouTube, SoundCloud o Apple Music*. No se realiza análisis ingresando el nombre escrito de la canción."
+                else:
+                    reply = "⚠️ La entrada parece ser un contenido hablado o no musical. Por favor, pega un enlace de audio/video válido."
             else:
                 tempo_val = analisis["tempo"]
                 secciones_val = analisis["secciones"]
 
-                # Regla del Ensamblado Híbrido: Prioridad a palabras clave
                 if analisis.get("genero_forzado"):
                     prediccion_ml = analisis["genero_forzado"]
                 elif modelo is not None:
@@ -462,7 +470,7 @@ PREPARACIÓN FÍSICA SUGERIDA:
             st.session_state.messages.append({"role": "assistant", "content": reply})
             with st.chat_message("assistant"):
                 st.markdown(reply)
-                if analisis["es_musica"]:
+                if analisis.get("es_musica"):
                     st.download_button(
                         label="📥 Descargar Ficha Técnica (.txt)",
                         data=ficha_texto,
@@ -470,7 +478,20 @@ PREPARACIÓN FÍSICA SUGERIDA:
                         mime="text/plain"
                     )
 
-# 6. PESTAÑA DE HISTORIAL
+        # 6. SCRIPT DE AUTO-SCROLL AUTOMÁTICO (Desplaza la pantalla abajo tras cada interacción)
+        components.html(
+            """
+            <script>
+                window.parent.document.querySelector('section.main').scrollTo({
+                    top: window.parent.document.querySelector('section.main').scrollHeight,
+                    behavior: 'smooth'
+                });
+            </script>
+            """,
+            height=0
+        )
+
+# 7. PESTAÑA DE HISTORIAL
 with tab_historial:
     st.subheader("📈 Resumen de Pistas Analizadas en esta Sesión")
     if len(st.session_state.historial_evaluaciones) > 0:
@@ -491,4 +512,4 @@ with tab_historial:
             mime="text/csv"
         )
     else:
-        st.info("Aún no has analizado ninguna pista durante esta sesión. ¡Inicia en el chat enviando el nombre o link de una canción!")
+        st.info("Aún no has analizado ninguna pista durante esta sesión. ¡Pega un enlace de YouTube o Spotify para comenzar!")
