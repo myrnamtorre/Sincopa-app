@@ -13,7 +13,7 @@ import random
 st.set_page_config(
     page_title="Síncopa • Asistente Coreográfico IA",
     page_icon="💃",
-    layout="centered"
+    layout="wide"
 )
 
 st.title("💃 Síncopa: Asistente Coreográfico IA")
@@ -30,21 +30,28 @@ if os.path.exists(ruta_modelo):
     except Exception as e:
         st.sidebar.error(f"Error al cargar el modelo: {e}")
 
-# 2. BASE DE DATOS EXTENDIDA DE SUGERENCIAS POR RITMO Y VELOCIDAD
-SUGERENCIAS_GENERO = {
+# 2. BANCO DE DATOS BASE PARA GENERACIÓN DINÁMICA
+ARTISTAS_Y_ESTILOS = {
     "Quebradita": {
-        "rapidas": ["La Culebra - Banda Machos", "El Baile del Caballito - Banda Machos", "Al Gato y al Ratón - Banda Machos", "La Chona - Los Tucanes de Tijuana"],
-        "moderadas": ["La Roncona - Banda Arkangel R-15", "El Apagón - Banda Yuri", "Vampiro - Banda Machos"]
+        "artistas": ["Banda Machos", "Los Tucanes de Tijuana", "Banda Arkangel R-15", "Banda Yuri", "Mi Banda El Mexicano", "Banda Maguey", "Banda Cuisillos", "Banda Pequeños Musical"],
+        "canciones_rapidas": ["La Culebra", "El Baile del Caballito", "Al Gato y al Ratón", "La Chona", "El Tucanazo", "No Bailes de Caballito", "La Niña Fresa"],
+        "canciones_moderadas": ["Vampiro", "La Roncona", "El Apagón", "Eva María", "Ramito de Violetas", "El Sonidito (Versión Banda)"],
+        "canciones_lentas": ["Lindo Michoacán", "Un Indio Quiere Llorar", "Corrido de los Pérez", "Casas de Madera"],
+        "canciones_principiantes": ["La Roncona", "El Apagón", "La Chona (a tiempo base)", "Ramito de Violetas"]
     },
     "Salsa": {
-        "rapidas": ["Aguanile - Héctor Lavoe", "La Rebelión - Joe Arroyo", "Aguanile - Marc Anthony", "Que Se Sepa - Roberto Roena"],
-        "lentas": ["Lluvia - Eddie Santiago", "Gitana - Willie Colón", "Sobredosis - Los Hermanos Lebrón", "Con Conciencia - Gilberto Santa Rosa"],
-        "moderadas": ["Valió la Pena - Marc Anthony", "Flor Pálida - Marc Anthony"]
+        "artistas": ["Héctor Lavoe", "Joe Arroyo", "Marc Anthony", "Roberto Roena", "Willie Colón", "Eddie Santiago", "Los Hermanos Lebrón", "Gilberto Santa Rosa", "Frankie Ruiz", "El Gran Combo de Puerto Rico", "Grupo Niche", "Ray Barretto"],
+        "canciones_rapidas": ["Aguanile", "La Rebelión", "Que Se Sepa", "Rebelión", "Indestructible", "Anacaona", "Cali Pachanguero", "Mambo Gozón"],
+        "canciones_moderadas": ["Valió la Pena", "Flor Pálida", "Marea de la Mar", "Gotas de Lluvia", "Llorarás", "Deseándote", "Tú Con Él"],
+        "canciones_lentas": ["Lluvia", "Gitana", "Sobredosis", "Con Conciencia", "Ven Devórame Otra Vez", "Casi Un Hechizo", "Aquel Viejo Motel"],
+        "canciones_principiantes": ["Flor Pálida", "Valió la Pena", "Gitana", "Idilio", "Tu Amor Me Hace Bien"]
     },
     "Bachata": {
-        "lentas": ["Burbujas de Amor - Juan Luis Guerra", "Infidelidades - Aventura", "Perdidos - Monchy & Alexandra", "Dile al Amor - Aventura"],
-        "rapidas": ["Propuesta Indecente - Romeo Santos", "Darte un Beso - Prince Royce", "Eres Mía - Romeo Santos", "Obsesión - Aventura"],
-        "moderadas": ["Stand by Me - Prince Royce", "El Perdedor - Aventura"]
+        "artistas": ["Romeo Santos", "Prince Royce", "Juan Luis Guerra", "Aventura", "Monchy & Alexandra", "Daniel Santacruz", "Kewin Cosmos", "Ataca & La Alemana Selection", "Zacarías Ferreira", "Frank Reyes"],
+        "canciones_rapidas": ["Propuesta Indecente", "Darte un Beso", "Eres Mía", "Obsesión", "Su Veneno", "Carita de Inocente", "La Diabla"],
+        "canciones_moderadas": ["Stand by Me", "El Perdedor", "Hilito", "Incondicional", "Deja Vu", "Sobredosis de Bachata"],
+        "canciones_lentas": ["Burbujas de Amor", "Infidelidades", "Perdidos", "Dile al Amor", "Enséñame a Olvidar", "Hoja en Blanco", "Por Un Segundo"],
+        "canciones_principiantes": ["Stand by Me", "Darte un Beso", "Burbujas de Amor", "Corazón Sin Cara", "Mi Corazoncito"]
     }
 }
 
@@ -54,9 +61,19 @@ if "messages" not in st.session_state:
         {
             "role": "assistant",
             "content": (
-                "👋 **¡Hola! Soy Síncopa, tu asistente para ayudarte a analizar tus canciones y estructurar tus rutinas de baile.**\n\n"
-                "Escribe el nombre de una canción, pega un enlace o pídeme sugerencias (ej. *'sugiere bachatas lentas'*, *'salsas rápidas'*, etc.).\n\n"
-                "> ⚠️ *Recuerda que estoy en entrenamiento continuo y mis estimaciones métricas/BPM pueden contener margen de error.*"
+                "👋 **¡Hola! Soy Síncopa, tu asistente de Inteligencia Artificial especializado en preparación coreográfica.**\n\n"
+                "Para aprovechar al máximo nuestra conversación, ten en cuenta lo que puedo hacer por ti:\n\n"
+                "### 🎯 ¿Qué puedes pedirme?:\n"
+                "1. **Análisis de Canción o Link:** Ingresa el título o pega un enlace de *Spotify, YouTube, SoundCloud o Apple Music* para clasificar su género (**Bachata, Salsa o Quebradita**) y calcular su tempo estimado (BPM).\n"
+                "2. **Exigencia Física & Modalidad:** Descubre el nivel de exigencia física (1 a 10) si la rutina se baila en **Pareja, Grupo/Compañía o Solista**.\n"
+                "3. **Acondicionamiento Físico:** Pídeme rutinas de ejercicio específicas (pliometría, disociación, agilidad) para aguantar el ritmo de la pista.\n"
+                "4. **Recomendaciones de Vestuario y Calzado:** Pregúntame qué ropa o calzado es el ideal para el género analizado.\n"
+                "5. **Sugerencias Dinámicas de Canciones:** Pídeme listas personalizadas (ej. *'bachatas lentas, salsas rápidas y quebraditas para principiantes'*).\n\n"
+                "--- \n"
+                "### 🛑 Límites del servicio:\n"
+                "* ⚠️ *No se procesan archivos locales subidos en formato audio (.mp3/.wav).* Por favor comparte el enlace o título.\n"
+                "* ⚠️ *Especializado exclusivamente en género tropical y latino:* **Bachata, Salsa y Quebradita**.\n"
+                "* ⚠️ *Las métricas y tempos (BPM) son estimaciones algorítmicas de orientación pedagógica y entrenamiento.*"
             )
         }
     ]
@@ -68,14 +85,8 @@ if "ultimo_genero_sugerido" not in st.session_state:
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
-# Mostrar historial de mensajes
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# 4. FUNCIONES DE EXTRACCIÓN Y ANÁLISIS
+# 4. FUNCIONES DE EXTRACCIÓN Y GENERACIÓN DINÁMICA
 def obtener_titulo_desde_link(url):
-    """Extrae el título real de la canción desde enlaces de Spotify, YouTube, Apple Music, SoundCloud, etc."""
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -149,175 +160,245 @@ def analizar_pista(query):
     }
 
 def obtener_metricas_multi_modalidad(genero_predicho):
-    """Genera recomendaciones simultáneas para Pareja, Grupo y Solista."""
     if genero_predicho == "Quebradita":
         base = 8.5
         recom = "⭐ **Sugerencia:** ¡Ideal para **Grupo / Compañía** por el impacto visual de los lanzamientos y bloques sincronizados!"
         ejercicios = (
-            "* 🦘 **Pliometría & Potencia:** Jump squats y salto de cuerda rápido (3 series x 45 seg) para resistir el rebote alto.\n"
-            "* 🦶 **Fuerza de Tobillo y Gemelos:** Elevaciones de talón en borde de escalón y trabajo de estabilidad de tobillos para zapateado continuo.\n"
-            "* 🫁 **Resistencia Cardiovascular HIIT:** Intervalos de alta intensidad de 30s esfuerzo / 15s descanso para aguantar el ritmo vertiginoso."
+            "* 🦘 **Pliometría & Potencia:** Jump squats y salto de cuerda rápido (3 series x 45 seg).\n"
+            "* 🦶 **Fuerza de Tobillo y Gemelos:** Elevaciones de talón para zapateado continuo.\n"
+            "* 🫁 **Resistencia Cardiovascular HIIT:** Intervalos de 30s esfuerzo / 15s descanso."
         )
+        metrica_ritmo = "⏱️ **Estructura Métrica:** Compás 2/4 rápido.\n👉 **Acentuación:** Marcación rápida constante. ¡Sincroniza los saltos e impulsos en los tiempos fuertes **1 y 2**!"
     elif genero_predicho == "Salsa":
         base = 7.0
         recom = "⭐ **Sugerencia:** Funciona excelente tanto en **Pareja** (turn patterns) como en **Solista** para lucir Shines/Footwork."
         ejercicios = (
-            "* ⚡ **Agilidad de Pies (Footwork):** Trabajo en escalera de agilidad (in-out rápidos) para velocidad en shines y cambios de peso.\n"
-            "* 🔄 **Estabilidad de Core & Giros:** Planchas dinámicas con rotación y giros spot focalizados para mantener el eje en secuencias rápidas.\n"
-            "* 🦵 **Movilidad de Cadera:** Ejercicios de disociación pélvica y fortalecimiento de abductores/aductores."
+            "* ⚡ **Agilidad de Pies (Footwork):** Escalera de agilidad para rapidez en shines.\n"
+            "* 🔄 **Estabilidad de Core & Giros:** Planchas dinámicas y giros spot focalizados.\n"
+            "* 🦵 **Movilidad de Cadera:** Disociación pélvica y fortalecimiento de abductores."
         )
+        metrica_ritmo = "⏱️ **Estructura Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2).\n👉 **Acentuación:** Paso básico en **1, 2, 3** (pausa en 4) y **5, 6, 7** (pausa en 8). Opciones de acento On1 u On2 según el arreglo."
     else: # Bachata
         base = 5.0
         recom = "⭐ **Sugerencia:** Perfecta para **Pareja** por la conexión y fluidez en ondas/sensual, o **Solista** para disociación."
         ejercicios = (
-            "* 🌊 **Disociación Corporal:** Trabajo de movilidad de columna, aislación torácica y ondas de torso frente al espejo.\n"
-            "* 🧘 **Flexibilidad & Control:** Estiramientos profundos de isquiotibiales y movilidad de cadera para ondas suaves sin tensión muscular.\n"
-            "* 🛡️ **Fuerza de Postura (Marco):** Remo con liga/mancuerna e isometría de deltoides para sostener el marco de pareja sin fatigar hombros."
+            "* 🌊 **Disociación Corporal:** Aislación torácica y ondas de torso.\n"
+            "* 🧘 **Flexibilidad & Control:** Estiramientos de isquiotibiales y movilidad de cadera.\n"
+            "* 🛡️ **Fuerza de Postura (Marco):** Remo con liga e isometría de deltoides."
         )
+        metrica_ritmo = "⏱️ **Estructura Métrica:** Compás 4/4 (Fraseo de 8 tiempos).\n👉 **Acentuación:** Pasos en **1, 2, 3** con **Tap / Golpe de Cadera** en el tiempo **4** (y **5, 6, 7** con Tap en **8**)."
 
     return {
         "pareja": round(base, 1),
         "grupo": round(min(10.0, base + 1.5), 1),
         "solista": round(min(10.0, base + 1.0), 1),
         "recomendacion_estilo": recom,
-        "ejercicios_recomendados": ejercicios
+        "ejercicios_recomendados": ejercicios,
+        "metrica_ritmo": metrica_ritmo
     }
 
-# 5. ATENCIÓN DE INTERACCIONES EN EL CHAT
-if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencias..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    p_lower = prompt.lower()
-
-    # A) DETECCIÓN DE PREGUNTAS DE SEGUIMIENTO (VESTUARIO / CALZADO / ENTRENAMIENTO)
-    palabras_vestuario = ["vestuario", "ropa", "ropa sugerida", "que me pongo", "qué me pongo", "outfit", "traje"]
-    palabras_calzado = ["calzado", "zapatos", "tenis", "zapatillas", "suela"]
-    palabras_entrenamiento = ["ejercicio", "ejercicios", "entrenamiento", "rutina", "preparacion", "preparación", "footwork", "pasos", "aguantar", "fisico", "físico"]
-
-    es_pregunta_vestuario = any(w in p_lower for w in palabras_vestuario)
-    es_pregunta_calzado = any(w in p_lower for w in palabras_calzado)
-    es_pregunta_entrenamiento = any(w in p_lower for w in palabras_entrenamiento)
-
-    if (es_pregunta_vestuario or es_pregunta_calzado or es_pregunta_entrenamiento) and st.session_state.ultima_evaluacion:
-        eval_previa = st.session_state.ultima_evaluacion
-        gen_previo = eval_previa["genero"]
-        cancion_previa = eval_previa["cancion"]
-        mm_prev = obtener_metricas_multi_modalidad(gen_previo)
-
-        if es_pregunta_vestuario:
-            if gen_previo == "Quebradita":
-                recom_v = "👗 **Vestuario Sugerido para Quebradita:**\n* **Compañía / Pareja:** Vestuario vaquero estilizado pero ligero (pantalones/faldas con strech flexible, camisas de tela respirable y flecos con buen movimiento). Evitar faldas demasiado largas que interfieran en las acrobacias."
-            elif gen_previo == "Salsa":
-                recom_v = "👗 **Vestuario Sugerido para Salsa:**\n* **Pareja / Solista:** Flecos, pedrería o trajes de corte estilizado que acentúen la rotación de cadera y hombros. Para solistas, pantalones de caída fluida que resalten el footwork."
-            else: # Bachata
-                recom_v = "👗 **Vestuario Sugerido para Bachata:**\n* **Sensual / Pareja:** Prendas entalladas de tela suave/elástica (lycra, aterciopelados ligeros) que permitan apreciar la disociación corporal y las ondas del torso sin fricción."
-
-            reply = f"💃 **Recomendación de Vestuario para *{cancion_previa}* ({gen_previo}):**\n\n{recom_v}"
-
-        elif es_pregunta_calzado:
-            if gen_previo == "Quebradita":
-                recom_c = "👟 **Calzado:** Botas flex con suela de amortiguación o tenis deportivos con buen soporte en tobillos para absorber el impacto de los brincos y zapateados."
-            elif gen_previo == "Salsa":
-                recom_c = "👠 **Calzado:** Zapatos de baile latino con suela de ante/gamuza para giros rápidos. Para solistas/shines, tenis de baile con punto de pivote."
-            else:
-                recom_c = "👠 **Calzado:** Zapatos de bachata flexible de flexión completa o tenis de baile urbano/sensual con suela deslizante."
-
-            reply = f"👠 **Calzado Recomendado para *{cancion_previa}* ({gen_previo}):**\n\n{recom_c}"
-
-        elif es_pregunta_entrenamiento:
-            reply = f"🏋️ **Acondicionamiento Físico Recomendado para *{cancion_previa}* ({gen_previo}):**\n\n{mm_prev['ejercicios_recomendados']}"
-
-        st.session_state.messages.append({"role": "assistant", "content": reply})
-        with st.chat_message("assistant"):
-            st.markdown(reply)
-
-    # B) DETECCIÓN DE SOLICITUD DE SUGERENCIAS CON FILTROS
-    elif any(w in p_lower for w in ["sugerencia", "sugerencias", "sugieres", "sugiere", "recomienda", "opciones", "bachata", "bachatas", "salsa", "salsas", "quebradita", "quebraditas", "ideas", "otras", "mas", "más"]):
-        if "quebradita" in p_lower or "quebraditas" in p_lower:
-            gen = "Quebradita"
-        elif "salsa" in p_lower or "salsas" in p_lower:
-            gen = "Salsa"
-        elif "bachata" in p_lower or "bachatas" in p_lower:
-            gen = "Bachata"
-        else:
-            gen = st.session_state.ultimo_genero_sugerido
-
-        st.session_state.ultimo_genero_sugerido = gen
-
-        es_lenta = any(w in p_lower for w in ["lenta", "lentas", "suave", "suaves", "romantica", "románticas", "sensual", "despacio"])
-        es_rapida = any(w in p_lower for w in ["rapida", "rápidas", "rapidas", "movida", "movidas", "prendida", "prendidas", "fast", "fuerte"])
-
-        cat_dict = SUGERENCIAS_GENERO.get(gen, {})
-
-        if es_lenta and "lentas" in cat_dict:
-            sug_base = cat_dict["lentas"].copy()
-            tag_vel = "Lentas / Románticas"
-        elif es_rapida and "rapidas" in cat_dict:
-            sug_base = cat_dict["rapidas"].copy()
-            tag_vel = "Rápidas / Intensa Métrica"
-        else:
-            sug_base = []
-            for k, lista in cat_dict.items():
-                sug_base.extend(lista)
-            tag_vel = "Variadas"
-
-        if st.session_state.ultima_evaluacion:
-            cancion_previa = st.session_state.ultima_evaluacion["cancion"].lower()
-            sug_base = [s for s in sug_base if cancion_previa not in s.lower()]
-
-        if any(w in p_lower for w in ["mas", "más", "otras", "diferentes", "nuevas"]):
-            random.seed(len(p_lower) + int(time.time() % 100))
-            random.shuffle(sug_base)
-
-        items_txt = "\n".join([f"* 🎶 **{s}**" for s in sug_base])
-        
-        reply = f"🎶 **Sugerencias de {gen} ({tag_vel}):**\n\n{items_txt}\n\n*¿Te gustaría evaluar alguna de estas? Escribe su nombre o pega un enlace.*"
-        
-        st.session_state.messages.append({"role": "assistant", "content": reply})
-        with st.chat_message("assistant"):
-            st.markdown(reply)
-
-    # C) EVALUACIÓN DIRECTA E INMEDIATA DE UNA NUEVA CANCIÓN O LINK
+def generar_sugerencias_dinamicas(genero, filtro, cantidad=3):
+    """Genera combinaciones de canciones de forma dinámica e impredecible."""
+    gen_data = ARTISTAS_Y_ESTILOS.get(genero, ARTISTAS_Y_ESTILOS["Bachata"])
+    artistas = gen_data["artistas"]
+    
+    clave_cancion = f"canciones_{filtro}"
+    if clave_cancion in gen_data:
+        canciones = gen_data[clave_cancion]
     else:
-        with st.chat_message("assistant"):
-            with st.spinner("🤖 Analizando pista y clasificando género..."):
-                time.sleep(0.3)
-                analisis = analizar_pista(prompt)
+        # Si pide algo variado o sin filtro exacto, junta todas las canciones disponibles
+        canciones = (
+            gen_data.get("canciones_rapidas", []) + 
+            gen_data.get("canciones_lentas", []) + 
+            gen_data.get("canciones_moderadas", [])
+        )
 
-        if not analisis["es_musica"]:
-            reply = "⚠️ La entrada parece ser un contenido hablado o no musical. Por favor, ingresa el nombre de una canción o pega un enlace de audio/video."
-        else:
-            tempo_val = analisis["tempo"]
-            secciones_val = analisis["secciones"]
+    # Muestreo aleatorio dinámico
+    canciones_seleccionadas = random.sample(canciones, min(len(canciones), cantidad))
+    artistas_seleccionados = random.sample(artistas, min(len(artistas), cantidad))
 
-            if modelo is not None:
-                df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
-                prediccion_ml = modelo.predict(df_in)[0]
+    resultados = []
+    for c, a in zip(canciones_seleccionadas, artistas_seleccionados):
+        resultados.append(f"{c} - {a}")
+    
+    return resultados
+
+def procesar_sub_peticion(sub_prompt):
+    sp = sub_prompt.lower().strip()
+    
+    if "quebradita" in sp or "quebraditas" in sp:
+        gen = "Quebradita"
+    elif "salsa" in sp or "salsas" in sp:
+        gen = "Salsa"
+    elif "bachata" in sp or "bachatas" in sp:
+        gen = "Bachata"
+    else:
+        gen = st.session_state.ultimo_genero_sugerido
+
+    if any(w in sp for w in ["principiante", "principiantes", "facil", "fácil", "basica", "básica", "iniciacion"]):
+        filtro = "principiantes"
+        etiqueta = "para Principiantes / Ritmo Claro"
+    elif any(w in sp for w in ["lenta", "lentas", "suave", "suaves", "romantica", "románticas", "sensual", "despacio"]):
+        filtro = "lentas"
+        etiqueta = "Lentas / Románticas"
+    elif any(w in sp for w in ["rapida", "rápidas", "rapidas", "movida", "movidas", "prendida", "prendidas", "fast", "fuerte"]):
+        filtro = "rapidas"
+        etiqueta = "Rápidas / Alta Intensidad"
+    elif any(w in sp for w in ["moderada", "moderadas", "intermedia", "intermedias"]):
+        filtro = "moderadas"
+        etiqueta = "Velocidad Moderada"
+    else:
+        filtro = "variadas"
+        etiqueta = "Variadas y Populares"
+
+    # Generar de forma 100% aleatoria y dinámica en cada petición
+    canciones_dinamicas = generar_sugerencias_dinamicas(gen, filtro)
+
+    return gen, etiqueta, canciones_dinamicas
+
+# 5. PESTAÑAS PRINCIPALES (CHAT VS HISTORIAL)
+tab_chat, tab_historial = st.tabs(["💬 Asistente Conversacional", "📊 Historial de Análisis"])
+
+with tab_chat:
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if prompt := st.chat_input("Escribe una canción, pega un link o pide listas (ej. bachatas lentas, salsas rápidas)..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        p_lower = prompt.lower()
+
+        palabras_vestuario = ["vestuario", "ropa", "ropa sugerida", "que me pongo", "qué me pongo", "outfit", "traje"]
+        palabras_calzado = ["calzado", "zapatos", "tenis", "zapatillas", "suela"]
+        palabras_entrenamiento = ["ejercicio", "ejercicios", "entrenamiento", "rutina", "preparacion", "preparación", "footwork", "pasos", "aguantar", "fisico", "físico"]
+
+        es_pregunta_vestuario = any(w in p_lower for w in palabras_vestuario)
+        es_pregunta_calzado = any(w in p_lower for w in palabras_calzado)
+        es_pregunta_entrenamiento = any(w in p_lower for w in palabras_entrenamiento)
+
+        if (es_pregunta_vestuario or es_pregunta_calzado or es_pregunta_entrenamiento) and st.session_state.ultima_evaluacion:
+            eval_previa = st.session_state.ultima_evaluacion
+            gen_previo = eval_previa["genero"]
+            cancion_previa = eval_previa["cancion"]
+            mm_prev = obtener_metricas_multi_modalidad(gen_previo)
+
+            if es_pregunta_vestuario:
+                if gen_previo == "Quebradita":
+                    recom_v = "👗 **Vestuario Sugerido para Quebradita:**\n* Vestuario vaquero estilizado pero ligero con strech flexible y flecos con movimiento."
+                elif gen_previo == "Salsa":
+                    recom_v = "👗 **Vestuario Sugerido para Salsa:**\n* Flecos, pedrería o trajes de corte estilizado que acentúen la rotación de cadera y hombros."
+                else:
+                    recom_v = "👗 **Vestuario Sugerido para Bachata:**\n* Prendas entalladas de tela suave/elástica que permitan apreciar la disociación corporal."
+
+                reply = f"💃 **Recomendación de Vestuario para *{cancion_previa}* ({gen_previo}):**\n\n{recom_v}"
+
+            elif es_pregunta_calzado:
+                if gen_previo == "Quebradita":
+                    recom_c = "👟 **Calzado:** Botas flex con suela de amortiguación o tenis deportivos con soporte en tobillos."
+                elif gen_previo == "Salsa":
+                    recom_c = "👠 **Calzado:** Zapatos de baile latino con suela de ante/gamuza para giros rápidos."
+                else:
+                    recom_c = "👠 **Calzado:** Zapatos de bachata de flexión completa o tenis de baile urbano."
+
+                reply = f"👠 **Calzado Recomendado para *{cancion_previa}* ({gen_previo}):**\n\n{recom_c}"
+
+            elif es_pregunta_entrenamiento:
+                reply = f"🏋️ **Acondicionamiento Físico Recomendado para *{cancion_previa}* ({gen_previo}):**\n\n{mm_prev['ejercicios_recomendados']}"
+
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+            with st.chat_message("assistant"):
+                st.markdown(reply)
+
+        elif any(w in p_lower for w in ["sugerencia", "sugerencias", "sugieres", "sugiere", "recomienda", "opciones", "lista", "listas", "bachata", "bachatas", "salsa", "salsas", "quebradita", "quebraditas"]):
+            partes = re.split(r',| y | e ', p_lower)
+            
+            bloques_respuesta = []
+            for parte in partes:
+                if parte.strip():
+                    gen, etiqueta, canciones = procesar_sub_peticion(parte)
+                    if canciones:
+                        items = "\n".join([f"  * 🎶 **{c}**" for c in canciones])
+                        bloques_respuesta.append(f"### 🎶 {gen} ({etiqueta}):\n{items}")
+
+            if bloques_respuesta:
+                reply = "¡Claro! Aquí tienes tus sugerencias dinámicas personalizadas:\n\n" + "\n\n".join(bloques_respuesta) + "\n\n*¿Te gustaría analizar alguna de estas en detalle? Solo escribe su nombre o pega su enlace.*"
             else:
-                prediccion_ml = "Quebradita" if tempo_val > 220 else ("Bachata" if tempo_val < 140 else "Salsa")
+                reply = "🎶 No encontré sugerencias exactas para esa combinación, pero puedes pedirme listas como *'bachatas lentas'*, *'salsas para principiantes'* o *'quebraditas rápidas'*."
 
-            mm = obtener_metricas_multi_modalidad(prediccion_ml)
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+            with st.chat_message("assistant"):
+                st.markdown(reply)
 
-            st.session_state.ultima_evaluacion = {
-                "cancion": analisis['cancion_formateada'],
-                "genero": prediccion_ml,
-                "tempo": tempo_val
-            }
-            st.session_state.historial_evaluaciones.append(st.session_state.ultima_evaluacion)
+        else:
+            with st.chat_message("assistant"):
+                with st.spinner("🤖 Analizando pista y clasificando género..."):
+                    time.sleep(0.3)
+                    analisis = analizar_pista(prompt)
 
-            cat_prev = SUGERENCIAS_GENERO.get(prediccion_ml, {})
-            sug_planas = []
-            for k, v in cat_prev.items():
-                sug_planas.extend(v)
+            if not analisis["es_musica"]:
+                reply = "⚠️ La entrada parece ser un contenido hablado o no musical. Por favor, ingresa el nombre de una canción o pega un enlace de audio/video."
+            else:
+                tempo_val = analisis["tempo"]
+                secciones_val = analisis["secciones"]
 
-            sug_rel = [s for s in sug_planas if analisis['cancion_formateada'].lower() not in s.lower()][:3]
-            sug_txt = ", ".join([f"*{s}*" for s in sug_rel])
+                if modelo is not None:
+                    df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
+                    prediccion_ml = modelo.predict(df_in)[0]
+                else:
+                    prediccion_ml = "Quebradita" if tempo_val > 220 else ("Bachata" if tempo_val < 140 else "Salsa")
 
-            reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
+                mm = obtener_metricas_multi_modalidad(prediccion_ml)
+
+                registro_sesion = {
+                    "Pista / Canción": analisis['cancion_formateada'],
+                    "Género Clasificado": prediccion_ml,
+                    "Tempo (BPM)": tempo_val,
+                    "Exigencia Pareja": mm['pareja'],
+                    "Exigencia Grupo": mm['grupo'],
+                    "Exigencia Solista": mm['solista']
+                }
+                st.session_state.ultima_evaluacion = {
+                    "cancion": analisis['cancion_formateada'],
+                    "genero": prediccion_ml,
+                    "tempo": tempo_val
+                }
+                st.session_state.historial_evaluaciones.append(registro_sesion)
+
+                # Opciones dinámicas relacionadas
+                sug_rel = generar_sugerencias_dinamicas(prediccion_ml, "variadas", cantidad=3)
+                sug_txt = ", ".join([f"*{s}*" for s in sug_rel])
+
+                ficha_texto = f"""==================================================
+FICHA TÉCNICA COREOGRÁFICA - SÍNCOPA IA
+==================================================
+Canción: {analisis['cancion_formateada']}
+Género Clasificado: {prediccion_ml}
+Tempo Estimado: ~{tempo_val} BPM
+
+EXIGENCIA FÍSICA POR MODALIDAD:
+- Pareja: {mm['pareja']}/10
+- Grupo / Compañía: {mm['grupo']}/10
+- Solista: {mm['solista']}/10
+
+ACENTUACIÓN Y MÉTRICA:
+{mm['metrica_ritmo']}
+
+PREPARACIÓN FÍSICA SUGERIDA:
+{mm['ejercicios_recomendados']}
+==================================================
+"""
+
+                reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
+
+---
+
+### 🎼 Marcación Coreográfica & Métrica Musical:
+{mm['metrica_ritmo']}
 
 ---
 
@@ -337,9 +418,38 @@ if prompt := st.chat_input("Escribe una canción, pega un link o pide sugerencia
 ---
 
 💡 *Otras opciones sugeridas de {prediccion_ml}:* {sug_txt}.
-*(Puedes preguntarme sobre calzado, vestuario o pedir listas como "salsas lentas")*.
 """
 
-        st.session_state.messages.append({"role": "assistant", "content": reply})
-        with st.chat_message("assistant"):
-            st.markdown(reply)
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+            with st.chat_message("assistant"):
+                st.markdown(reply)
+                if analisis["es_musica"]:
+                    st.download_button(
+                        label="📥 Descargar Ficha Técnica (.txt)",
+                        data=ficha_texto,
+                        file_name=f"Ficha_{analisis['cancion_formateada'].replace(' ', '_')}.txt",
+                        mime="text/plain"
+                    )
+
+# 6. PESTAÑA DE HISTORIAL Y MÉTRICAS ACUMULADAS
+with tab_historial:
+    st.subheader("📈 Resumen de Pistas Analizadas en esta Sesión")
+    if len(st.session_state.historial_evaluaciones) > 0:
+        df_historial = pd.DataFrame(st.session_state.historial_evaluaciones)
+        st.dataframe(df_historial, use_container_width=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total de Pistas Analizadas", len(df_historial))
+        with col2:
+            st.metric("Promedio de Tempo (BPM)", f"{df_historial['Tempo (BPM)'].mean():.1f}")
+            
+        csv_data = df_historial.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Exportar Historial Completo a CSV",
+            data=csv_data,
+            file_name="historial_sincopa.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("Aún no has analizado ninguna pista durante esta sesión. ¡Inicia en el chat enviando el nombre o link de una canción!")
