@@ -73,8 +73,17 @@ if "ultima_evaluacion" not in st.session_state:
 # 3. EXTRACCIÓN Y INSPECCIÓN DE AUDIO (30s)
 # ==========================================
 def es_url_valida(texto):
-    regex = r'^(https?://)?(www\.)?(youtube\.com|youtu\.be|spotify\.com|soundcloud\.com|apple\.com)'
-    return bool(re.match(regex, texto.strip(), re.IGNORECASE))
+    """Valida enlaces flexibles (incluyendo intl-es, links móviles y query params)."""
+    texto_clean = texto.strip().lower()
+    dominios_validos = [
+        "spotify.com", 
+        "youtube.com", 
+        "youtu.be", 
+        "soundcloud.com", 
+        "music.apple.com", 
+        "apple.com"
+    ]
+    return any(dominio in texto_clean for dominio in dominios_validos) and texto_clean.startswith("http")
 
 @st.cache_data(ttl=3600)
 def obtener_titulo_desde_link(url):
@@ -104,7 +113,6 @@ def analizar_pista(url):
     if not es_url_valida(url):
         return {"es_musica": False, "razon": "requiere_link"}
 
-    # Obtenemos el nombre visual únicamente para etiquetar en la App
     nombre_visual = obtener_titulo_desde_link(url)
     if not nombre_visual:
         nombre_visual = "Pista / Enlace de Audio"
@@ -112,8 +120,6 @@ def analizar_pista(url):
     # -------------------------------------------------------------------------
     # EVALUACIÓN ESPECTRAL (Segmento de 0 a 30 segundos)
     # -------------------------------------------------------------------------
-    # speechiness: Medición de envolvente vocal de voz hablada.
-    # danceability: Presencia de pulso rítmico periódico.
     speechiness_30s = round(random.uniform(0.02, 0.85), 2)
     danceability_30s = round(random.uniform(0.20, 0.95), 2)
     tempo_30s = random.randint(100, 195)
@@ -130,7 +136,6 @@ def analizar_pista(url):
             "danceability_30s": danceability_30s
         }
 
-    # Si pasa la prueba rítmica de los 30s, se extraen los atributos completos
     return {
         "es_musica": True,
         "cancion_formateada": nombre_visual,
@@ -202,14 +207,12 @@ with tabs[0]:
 
         prompt_low = prompt.strip().lower()
 
-        # Respuesta amable para saludos genéricos
         if prompt_low in ["hola", "buenas", "que haces?", "quien eres?", "ayuda"]:
             reply = "¡Hola! Para comenzar, **por favor ingresa el enlace (link) de la canción** que deseas analizar."
             with st.chat_message("assistant"):
                 st.markdown(reply)
             st.session_state.messages.append({"role": "assistant", "content": reply})
 
-        # Procesamiento técnico por enlace
         else:
             with st.chat_message("assistant"):
                 with st.spinner("🎧 Inspeccionando señal espectral de los primeros 30 segundos..."):
@@ -243,7 +246,6 @@ with tabs[0]:
                         'num_secciones': analisis['num_secciones']
                     }])
 
-                    # Predicción mediante Modelo ML o reglas de respaldo
                     if modelo is not None:
                         try:
                             prediccion_ml = modelo.predict(df_in)[0]
