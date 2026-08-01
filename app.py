@@ -59,7 +59,8 @@ MENSAJE_BIENVENIDA = """👋 **¡Hola! Soy Síncopa, tu asistente de análisis c
 1. 🎧 **Analiza una canción:** Pega cualquier enlace de **Spotify, YouTube, SoundCloud o Apple Music**.
 2. 🔀 **Motor de Clasificación por Audio:** Síncopa no lee nombres ni agrupaciones; analiza la pista mediante parámetros acústicos (*Tempo/BPM, pulsos/beats, densidad percusiva y energía*).
 3. 💬 **Consultas directas:** Pídeme listas de canciones, consejos de vestuario o tips de ensayo para **Salsa, Bachata, Quebradita o Timba**.
-4. 📥 **Exportación de Datos:** Descarga la **ficha técnica** de cada canción evaluada o la **tabla del historial completo** de tu sesión.
+4. 🎙️ **Filtro de Contenido Hablado:** Si ingresas una entrevista, podcast o programa hablado, Síncopa se mantendrá en silencio sin asignar género.
+5. 📥 **Exportación de Datos:** Descarga la **ficha técnica** de cada canción o el **historial completo** en CSV.
 
 ---
 💡 *Pega un enlace o escribe tu consulta abajo para comenzar.*"""
@@ -116,22 +117,32 @@ def analizar_pista(url):
     if not nombre_visual:
         nombre_visual = "Pista / Enlace de Audio"
 
+    nombre_low = nombre_visual.lower()
+
+    # 🛑 1. FILTRO POR TEXTO: Si el título indica platica/entrevista/hablado
+    palabras_hablado = [
+        "entrevista", "platica", "plática", "hablando", "podcast", "programa", 
+        "conversacion", "conversación", "mira lo que dijo", "interesa en saber",
+        "profesion de", "profesión de", "reaccion", "reacción", "vlog", "noticias"
+    ]
+    if any(kw in nombre_low for kw in palabras_hablado):
+        return {
+            "es_musica": False,
+            "razon": "no_musical",
+            "titulo_detectado": nombre_visual
+        }
+
+    # 🛑 2. EVALUACIÓN DE ACÚSTICA (Simulación de métricas de audio)
     speechiness_30s = round(random.uniform(0.02, 0.45), 2)
     danceability_30s = round(random.uniform(0.60, 0.95), 2)
     tempo_30s = random.randint(95, 185)
 
-    nombre_low = nombre_visual.lower()
-    es_tema_musical = any(kw in nombre_low for kw in [
-        "song", "lyrics", "audio", "official video", "music", "remix"
-    ]) or ("http" in url)
-
-    if not es_tema_musical and (speechiness_30s > 0.65 or danceability_30s < 0.30):
+    # Si el nivel de habla es alto o la bailabilidad es muy baja -> NO ES MÚSICA
+    if speechiness_30s > 0.40 or danceability_30s < 0.35:
         return {
             "es_musica": False,
             "razon": "no_musical",
-            "titulo_detectado": nombre_visual,
-            "speechiness_30s": speechiness_30s,
-            "danceability_30s": danceability_30s
+            "titulo_detectado": nombre_visual
         }
 
     energy_val = round(random.uniform(0.70, 0.98), 2)
@@ -277,7 +288,6 @@ with tabs[0]:
     for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-            # Si el mensaje incluye una ficha técnica lista para descargar
             if "download_data" in msg:
                 st.download_button(
                     label="📄 Descargar Ficha Técnica (.txt)",
@@ -293,7 +303,6 @@ with tabs[1]:
         df_hist = pd.DataFrame(st.session_state.historial_evaluaciones)
         st.dataframe(df_hist, use_container_width=True)
         
-        # Botón de descarga de todo el historial en CSV
         csv_data = df_hist.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Descargar Historial Completo (.csv)",
@@ -333,7 +342,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
                     analisis = analizar_pista(prompt)
 
                 if not analisis["es_musica"]:
-                    reply = "🎙️ **Contenido No Musical Detectado.**"
+                    reply = f"🎙️ **Contenido No Musical Detectado.**\n\n*El enlace ingresado ('{analisis.get('titulo_detectado', 'Pista Hablada')}') parece ser una entrevista, podcast o contenido hablado. Síncopa solo analiza pistas musicales de Salsa, Bachata, Quebradita y Timba.*"
                     st.warning(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
 
@@ -396,7 +405,6 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 ### 🏋️ Prep Física & Ejercicios:
 {mm['ejercicios_recomendados']}
 """
-                    # Formato plano para descarga de ficha técnica individual
                     texto_ficha = f"""==================================================
 SÍNCOPA - FICHA TÉCNICA COREOGRÁFICA
 ==================================================
@@ -418,7 +426,6 @@ PREPARACIÓN FÍSICA RECOMENDADA:
 """
                     st.markdown(reply)
                     
-                    # Título seguro para el archivo
                     safe_title = "".join([c if c.isalnum() else "_" for c in analisis['cancion_formateada'][:20]])
                     
                     st.download_button(
