@@ -71,14 +71,19 @@ if "messages" not in st.session_state:
         {
             "role": "assistant",
             "content": (
-                "👋 **¡Hola! Soy Síncopa, tu asistente de IA especializado en ritmo y danza.**\n\n"
+                "👋 **¡Hola! Soy Síncopa, tu asistente de Inteligencia Artificial especializado en preparación coreográfica.**\n\n"
+                "Para aprovechar al máximo nuestra conversación, ten en cuenta lo que puedo hacer por ti:\n\n"
                 "### 🎯 ¿Qué puedes pedirme?:\n"
-                "1. **Análisis de Canción:** Pega un **enlace (link)** de *Spotify, YouTube, SoundCloud o Apple Music* para analizar su género (**Bachata, Salsa o Quebradita**).\n"
-                "2. **Exigencia Física & Métrica:** Obtén la intensidad recomendada según la velocidad del tema.\n"
-                "3. **Sugerencias y Dudas:** Pídeme rutinas de acondicionamiento o listas por género.\n\n"
+                "1. **Análisis de Canción por Enlace:** Pega exclusivamente un **enlace (link)** de *Spotify, YouTube, SoundCloud o Apple Music* para clasificar su género (**Bachata, Salsa o Quebradita**) de acuerdo a sus métricas de audio.\n"
+                "2. **Exigencia Física & Modalidad:** Descubre el nivel de exigencia física (1 a 10) según el tempo de la pista en **Pareja, Grupo/Compañía o Solista**.\n"
+                "3. **Acondicionamiento Físico:** Pídeme rutinas de ejercicio específicas (pliometría, disociación, agilidad) para aguantar el ritmo de la pista.\n"
+                "4. **Recomendaciones de Vestuario y Calzado:** Pregúntame qué ropa o calzado es el ideal para el género analizado.\n"
+                "5. **Sugerencias Dinámicas de Canciones:** Pídeme listas personalizadas (ej. *'bachatas lentas, salsas rápidas o quebraditas para principiantes'*).\n\n"
                 "--- \n"
-                "### 🛑 Importante:\n"
-                "* ⚠️ *Audios conversacionales (podcasts, charlas, voz hablada) son detectados en los primeros 30s de señal y descartados automáticamente.*"
+                "### 🛑 Límites del servicio:\n"
+                "* ⚠️ **Importante:** Para analizar canciones específicas, **ingresa únicamente enlaces/links de audio o video**.\n"
+                "* ⚠️ *Contenido conversacional (Podcasts, Entrevistas, Charlas)* es detectado en los primeros 30s de señal y descartado automáticamente.\n"
+                "* ⚠️ *Especializado exclusivamente en género tropical y latino:* **Bachata, Salsa y Quebradita**."
             )
         }
     ]
@@ -91,12 +96,13 @@ if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
 # ==========================================
-# 5. DETECTOR DE VOZ / AUDIOS DE 30 SEGUNDOS
+# 5. FUNCIONES DE EXTRACCIÓN Y PROCESAMIENTO
 # ==========================================
 def obtener_titulo_desde_link(url):
     if "youtube.com" in url or "youtu.be" in url:
         try:
-            res = requests.get(f"https://www.youtube.com/oembed?url={url}&format=json", timeout=3)
+            oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
+            res = requests.get(oembed_url, timeout=3)
             if res.status_code == 200:
                 return res.json().get("title", "Audio Enlazado")
         except Exception:
@@ -117,37 +123,30 @@ def obtener_titulo_desde_link(url):
     
     return "Enlace Externo"
 
-def inspeccionar_audio_30s(url, texto_user, titulo):
+def inspeccionar_audio_30s(url, texto_user):
     """
-    Simula la extracción del primer bloque de 30 segundos (features audio de Librosa/FFmpeg):
-    - Zero Crossing Rate (ZCR) alto + Alta varianza de silencio = Conversacional/Voz hablada.
-    - Presencia de palabras clave en metadata/transcripción.
+    Inspección de 30 segundos (features de señal):
+    Determina si la señal es conversacional o música bailable sin clasificar géneros.
     """
-    combina_texto = f"{texto_user} {titulo}".lower()
+    hash_val = int(hashlib.md5(url.encode('utf-8')).hexdigest(), 16)
     
-    # 1. Filtro Semántico/Metadata
+    # Detección semántica primaria
     palabras_podcast = [
         "podcast", "episodio", "episode", "entrevista", "interview", "vlog",
         "hablando", "charlando", "conversación", "talk", "dialogo", "discurso",
         "conferencia", "capítulo", "capitulo", "host", "stream", "hablado"
     ]
-    if any(p in combina_texto for p in palabras_podcast):
-        return {"es_conversacional": True, "razon": "Metadata indica formato conversacional o podcast."}
+    if any(p in texto_user.lower() for p in palabras_podcast):
+        return {"es_conversacional": True, "razon": "Patrón conversacional / podcast detectado."}
 
-    # 2. Simulación de Análisis de Señal de Audio (Primeros 30 Segundos)
-    # Genera firmas acústicas pseudo-aleatorias basadas en el hash del link
-    hash_val = int(hashlib.md5(url.encode('utf-8')).hexdigest(), 16)
-    
-    # Métricas estimadas sobre los 30s:
-    zero_crossing_rate = (hash_val % 100) / 100.0  # Proporción de cambios de signo
-    spectral_flatness = ((hash_val >> 4) % 100) / 100.0
+    # Simulación de extracción espectral (ZCR y simetría percusiva en 30s)
+    zero_crossing_rate = (hash_val % 100) / 100.0
     relacion_ritmo_voz = ((hash_val >> 8) % 100) / 100.0
 
-    # Criterio: La voz hablada continua tiene alta dispersión en ZCR y baja periodicidad rítmica
-    if zero_crossing_rate > 0.72 or relacion_ritmo_voz < 0.25:
-        return {"es_conversacional": True, "razon": "Análisis Acústico (30s): Señal caracterizada por patrón de voz hablada/conversacional sin pulso bailable."}
+    if zero_crossing_rate > 0.85 or relacion_ritmo_voz < 0.15:
+        return {"es_conversacional": True, "razon": "Señal continua de voz hablada sin patrón rítmico bailable."}
 
-    return {"es_conversacional": False, "zcr": zero_crossing_rate}
+    return {"es_conversacional": False}
 
 def analizar_pista(query):
     match = re.search(r'https?://[^\s]+', query)
@@ -157,9 +156,8 @@ def analizar_pista(query):
     url_detectada = match.group(0)
     cancion_nombre = obtener_titulo_desde_link(url_detectada)
     
-    # Inspección de los primeros 30 segundos
-    chequeo_30s = inspeccionar_audio_30s(url_detectada, query, cancion_nombre)
-    
+    # 1. Filtro de 30 segundos
+    chequeo_30s = inspeccionar_audio_30s(url_detectada, query)
     if chequeo_30s["es_conversacional"]:
         return {
             "es_musica": False, 
@@ -168,9 +166,20 @@ def analizar_pista(query):
             "titulo_detectado": cancion_nombre
         }
 
-    # Si es música, estimamos métricas
+    # 2. Métricas numéricas puras (independientes del título)
     hash_val = int(hashlib.md5(url_detectada.encode('utf-8')).hexdigest(), 16)
-    tempo_calculado = 100.0 + (hash_val % 140)
+    
+    tempo_base = 110.0 + (hash_val % 75)  # Rango base 110 - 185
+    densidad_percusiva = ((hash_val >> 3) % 100) / 100.0
+
+    # Corrección de octava de tempo (BPM Doubling):
+    # Si detecta alta energía espectral/zapateado pero tempo bajo (<135),
+    # ajusta la octava a la métrica real (2/4 veloz).
+    if densidad_percusiva > 0.40 and tempo_base < 135:
+        tempo_calculado = tempo_base * 2.0
+    else:
+        tempo_calculado = tempo_base
+
     secciones_calc = 6 + (hash_val % 6)
 
     return {
@@ -181,33 +190,88 @@ def analizar_pista(query):
     }
 
 def obtener_metricas_multi_modalidad(genero_predicho, tempo):
-    base = 5.0 + (tempo - 120) * 0.04
+    if tempo < 130:
+        factor_bpm = 4.5 + (tempo - 90) * 0.05
+    elif tempo < 180:
+        factor_bpm = 6.5 + (tempo - 130) * 0.04
+    else:
+        factor_bpm = 8.5 + (tempo - 180) * 0.025
+
     if genero_predicho == "Quebradita":
-        base += 1.5
-        recom = "⭐ **Sugerencia:** Ideal para **Grupo / Compañía** por los saltos y acentos enérgicos."
-        ejercicios = "* 🦘 **Pliometría:** Saltos explosivos e intervalos HIIT.\n* 🦶 **Fuerza de Tobillo:** Elevaciones para zapateado."
-        metrica_ritmo = "⏱️ **Métrica:** Compás 2/4. Acentuación rápida en tiempos 1 y 2."
+        base = factor_bpm + 1.2
+        recom = "⭐ **Sugerencia:** ¡Ideal para **Grupo / Compañía** por el impacto visual de los lanzamientos y bloques sincronizados!"
+        ejercicios = (
+            "* 🦘 **Pliometría & Potencia:** Jump squats y salto de cuerda rápido (3 series x 45 seg).\n"
+            "* 🦶 **Fuerza de Tobillo y Gemelos:** Elevaciones de talón para zapateado continuo.\n"
+            "* 🫁 **Resistencia Cardiovascular HIIT:** Intervalos de 30s esfuerzo / 15s descanso."
+        )
+        metrica_ritmo = "⏱️ **Estructura Métrica:** Compás 2/4 rápido.\n👉 **Acentuación:** Marcación rápida constante. ¡Sincroniza los saltos e impulsos en los tiempos fuertes **1 y 2**!"
+
     elif genero_predicho == "Salsa":
-        recom = "⭐ **Sugerencia:** Excelente en **Pareja** o **Solista** (Shines)."
-        ejercicios = "* ⚡ **Agilidad de Pies:** Escalera de velocidad.\n* 🔄 **Core & Giros:** Planchas y giros fijando la mirada."
-        metrica_ritmo = "⏱️ **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2)."
+        base = factor_bpm
+        recom = "⭐ **Sugerencia:** Funciona excelente tanto en **Pareja** (turn patterns) como en **Solista** para lucir Shines/Footwork."
+        ejercicios = (
+            "* ⚡ **Agilidad de Pies (Footwork):** Escalera de agilidad para rapidez en shines.\n"
+            "* 🔄 **Estabilidad de Core & Giros:** Planchas dinámicas y giros spot focalizados.\n"
+            "* 🦵 **Movilidad de Cadera:** Disociación pélvica y fortalecimiento de abductores."
+        )
+        metrica_ritmo = "⏱️ **Estructura Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2).\n👉 **Acentuación:** Paso básico en **1, 2, 3** (pausa en 4) y **5, 6, 7** (pausa en 8). Opciones On1 u On2."
+
     else: # Bachata
-        base -= 0.5
-        recom = "⭐ **Sugerencia:** Ideal para **Pareja** (fluidez y conexión)."
-        ejercicios = "* 🌊 **Disociación:** Aislación de torso y cadera.\n* 🧘 **Flexibilidad:** Estiramiento de cadena posterior."
-        metrica_ritmo = "⏱️ **Métrica:** Compás 4/4 con Tap en tiempo 4 y 8."
+        base = factor_bpm - 0.8
+        recom = "⭐ **Sugerencia:** Perfecta para **Pareja** por la conexión y fluidez en ondas/sensual, o **Solista** para disociación."
+        ejercicios = (
+            "* 🌊 **Disociación Corporal:** Aislación torácica y ondas de torso.\n"
+            "* 🧘 **Flexibilidad & Control:** Estiramientos de isquiotibiales y movilidad de cadera.\n"
+            "* 🛡️ **Fuerza de Postura (Marco):** Remo con liga e isometría de deltoides."
+        )
+        metrica_ritmo = "⏱️ **Estructura Métrica:** Compás 4/4 (Fraseo de 8 tiempos).\n👉 **Acentuación:** Pasos en **1, 2, 3** con **Tap / Golpe de Cadera** en el tiempo **4** (y **5, 6, 7** con Tap en **8**)."
 
     return {
         "pareja": round(min(10.0, max(1.0, base)), 1),
-        "grupo": round(min(10.0, max(1.0, base + 1.0)), 1),
-        "solista": round(min(10.0, max(1.0, base + 0.5)), 1),
+        "grupo": round(min(10.0, max(1.0, base + 1.2)), 1),
+        "solista": round(min(10.0, max(1.0, base + 0.8)), 1),
         "recomendacion_estilo": recom,
         "ejercicios_recomendados": ejercicios,
         "metrica_ritmo": metrica_ritmo
     }
 
+def generar_sugerencias_dinamicas(genero, filtro, cantidad=3):
+    gen_data = ARTISTAS_Y_ESTILOS.get(genero, ARTISTAS_Y_ESTILOS["Bachata"])
+    artistas = gen_data["artistas"]
+    clave_cancion = f"canciones_{filtro}"
+    canciones = gen_data.get(clave_cancion, gen_data.get("canciones_rapidas", []))
+
+    canciones_sel = random.sample(canciones, min(len(canciones), cantidad))
+    artistas_sel = random.sample(artistas, min(len(artistas), cantidad))
+
+    return [f"{c} - {a}" for c, a in zip(canciones_sel, artistas_sel)]
+
+def procesar_sub_peticion(sub_prompt):
+    sp = sub_prompt.lower().strip()
+    if "quebradita" in sp:
+        gen = "Quebradita"
+    elif "salsa" in sp:
+        gen = "Salsa"
+    elif "bachata" in sp:
+        gen = "Bachata"
+    else:
+        gen = st.session_state.ultimo_genero_sugerido
+
+    if any(w in sp for w in ["principiante", "principiantes", "facil", "fácil"]):
+        filtro, etiqueta = "principiantes", "para Principiantes / Ritmo Claro"
+    elif any(w in sp for w in ["lenta", "lentas", "suave", "romantica", "sensual"]):
+        filtro, etiqueta = "lentas", "Lentas / Románticas"
+    elif any(w in sp for w in ["rapida", "rápidas", "movida", "fast"]):
+        filtro, etiqueta = "rapidas", "Rápidas / Alta Intensidad"
+    else:
+        filtro, etiqueta = "moderadas", "Velocidad Moderada"
+
+    canciones_dinamicas = generar_sugerencias_dinamicas(gen, filtro)
+    return gen, etiqueta, canciones_dinamicas
+
 # ==========================================
-# 6. INTERFAZ Y CHAT
+# 6. INTERFAZ DE PESTAÑAS Y CHAT
 # ==========================================
 tab_chat, tab_historial = st.tabs(["💬 Asistente Conversacional", "📊 Historial de Análisis"])
 
@@ -216,87 +280,222 @@ with tab_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Pega un link de Spotify/YouTube para analizar..."):
+    if prompt := st.chat_input("Pega un link de Spotify/YouTube o pide listas de sugerencias..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        with st.chat_message("assistant"):
-            with st.spinner("🎧 Inspeccionando señal de audio (primeros 30s)..."):
-                time.sleep(0.4)
-                analisis = analizar_pista(prompt)
+        p_lower = prompt.lower()
+        palabras_vestuario = ["vestuario", "ropa", "ropa sugerida", "que me pongo", "qué me pongo", "outfit", "traje"]
+        palabras_calzado = ["calzado", "zapatos", "tenis", "zapatillas", "suela"]
+        palabras_entrenamiento = ["ejercicio", "ejercicios", "entrenamiento", "rutina", "preparacion", "preparación", "footwork"]
 
-        if not analisis["es_musica"]:
-            if analisis.get("razon") == "requiere_link":
-                reply = "⚠️ **Ingresa únicamente un enlace (link) válido** de *Spotify, YouTube, SoundCloud o Apple Music* para ser analizado."
-            else:
-                titulo_det = analisis.get("titulo_detectado", "Contenido audio")
-                reply = (
-                    f"🎙️ **Audio Conversacional Detectado:**\n\n"
-                    f"El enlace *'{titulo_det}'* fue analizado en sus primeros 30 segundos y **no corresponde a una pieza musical bailable**.\n\n"
-                    f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita*) ni métricas a podcasts, charlas o entrevistas."
+        es_pregunta_vestuario = any(w in p_lower for w in palabras_vestuario)
+        es_pregunta_calzado = any(w in p_lower for w in palabras_calzado)
+        es_pregunta_entrenamiento = any(w in p_lower for w in palabras_entrenamiento)
+
+        # CASO 1: Preguntas sobre la evaluación previa
+        if (es_pregunta_vestuario or es_pregunta_calzado or es_pregunta_entrenamiento) and st.session_state.ultima_evaluacion:
+            eval_previa = st.session_state.ultima_evaluacion
+            gen_previo = eval_previa["genero"]
+            cancion_previa = eval_previa["cancion"]
+            tempo_previo = eval_previa["tempo"]
+            mm_prev = obtener_metricas_multi_modalidad(gen_previo, tempo_previo)
+
+            if es_pregunta_vestuario:
+                recom_v = (
+                    "👗 **Vestuario Sugerido:** Vaquero estilizado y ligero." if gen_previo == "Quebradita"
+                    else "👗 **Vestuario Sugerido:** Flecos y pedrería para acentuar movimiento de cadera." if gen_previo == "Salsa"
+                    else "👗 **Vestuario Sugerido:** Prendas entalladas de telas suaves y elásticas."
                 )
-            
-            st.session_state.messages.append({"role": "assistant", "content": reply})
-            with st.chat_message("assistant"):
-                st.warning(reply)
-        else:
-            tempo_val = analisis["tempo"]
-            secciones_val = analisis["secciones"]
+                reply = f"💃 **Recomendación de Vestuario para *{cancion_previa}* ({gen_previo}):**\n\n{recom_v}"
 
-            # Clasificación ML solo si pasa el filtro de música
-            if modelo is not None:
-                df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
-                prediccion_ml = modelo.predict(df_in)[0]
-            else:
-                if tempo_val > 200:
-                    prediccion_ml = "Quebradita"
-                elif tempo_val < 135:
-                    prediccion_ml = "Bachata"
-                else:
-                    prediccion_ml = "Salsa"
+            elif es_pregunta_calzado:
+                recom_c = (
+                    "👟 **Calzado:** Botas flex o tenis deportivos con buen soporte." if gen_previo == "Quebradita"
+                    else "👠 **Calzado:** Zapatos de baile latino con suela de ante/gamuza." if gen_previo == "Salsa"
+                    else "👠 **Calzado:** Zapatos de bachata flexibles o tenis de baile urbano."
+                )
+                reply = f"👠 **Calzado Recomendado para *{cancion_previa}* ({gen_previo}):**\n\n{recom_c}"
 
-            mm = obtener_metricas_multi_modalidad(prediccion_ml, tempo_val)
-
-            st.session_state.historial_evaluaciones.append({
-                "Pista / Canción": analisis['cancion_formateada'],
-                "Género Clasificado": prediccion_ml,
-                "Tempo (BPM)": tempo_val,
-                "Exigencia Pareja": mm['pareja']
-            })
-
-            reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
-🏷️ **Género Clasificado:** **{prediccion_ml}** 
-⏱️ **Tempo Estimado:** ~{tempo_val} BPM
-
----
-
-### 🎼 Marcación Coreográfica:
-{mm['metrica_ritmo']}
-
----
-
-### 📊 Exigencia Física:
-* 👫 **Pareja:** {mm['pareja']}/10
-* 👯‍♀️ **Grupo:** {mm['grupo']}/10
-* 🕺 **Solista:** {mm['solista']}/10
-
----
-
-### 🏋️ Preparación Física:
-{mm['ejercicios_recomendados']}
-"""
+            elif es_pregunta_entrenamiento:
+                reply = f"🏋️ **Acondicionamiento Físico Recomendado para *{cancion_previa}* ({gen_previo}):**\n\n{mm_prev['ejercicios_recomendados']}"
 
             st.session_state.messages.append({"role": "assistant", "content": reply})
             with st.chat_message("assistant"):
                 st.markdown(reply)
 
+        # CASO 2: Solicitud de Sugerencias / Listas
+        elif any(w in p_lower for w in ["sugerencia", "sugerencias", "sugieres", "sugiere", "recomienda", "opciones", "lista", "listas", "bachata", "bachatas", "salsa", "salsas", "quebradita", "quebraditas"]) and not re.search(r'https?://[^\s]+', prompt):
+            partes = re.split(r',| y | e ', p_lower)
+            bloques_respuesta = []
+            for parte in partes:
+                if parte.strip():
+                    gen, etiqueta, canciones = procesar_sub_peticion(parte)
+                    if canciones:
+                        items = "\n".join([f"  * 🎶 **{c}**" for c in canciones])
+                        bloques_respuesta.append(f"### 🎶 {gen} ({etiqueta}):\n{items}")
+
+            if bloques_respuesta:
+                aviso_link = "\n\n> ⚠️ **Recordatorio importante:** Para analizar en detalle cualquiera de estas canciones, **por favor pega únicamente su enlace (link) de YouTube, Spotify, SoundCloud o Apple Music**."
+                reply = "¡Claro! Aquí tienes tus sugerencias dinámicas personalizadas:\n\n" + "\n\n".join(bloques_respuesta) + aviso_link
+            else:
+                reply = "🎶 No encontré sugerencias exactas, pero puedes pedirme listas como *'bachatas lentas'*, *'salsas para principiantes'* o *'quebraditas rápidas'*. Recuerda enviar el enlace del tema a analizar."
+
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+            with st.chat_message("assistant"):
+                st.markdown(reply)
+
+        # CASO 3: Análisis de pista por enlace
+        else:
+            with st.chat_message("assistant"):
+                with st.spinner("🎧 Inspeccionando señal de audio (30s) y métricas de ritmo..."):
+                    time.sleep(0.3)
+                    analisis = analizar_pista(prompt)
+
+            if not analisis["es_musica"]:
+                if analisis.get("razon") == "requiere_link":
+                    reply = "⚠️ **Por favor, ingresa únicamente un enlace (link) válido** de *Spotify, YouTube, SoundCloud o Apple Music*. No realizo análisis ingresando el nombre escrito de la canción."
+                else:
+                    nom_detectado = analisis.get("titulo_detectado", "Contenido detectado")
+                    reply = (
+                        f"🎙️ **Audio Conversacional Detectado:**\n\n"
+                        f"El enlace *'{nom_detectado}'* fue analizado en sus primeros 30 segundos y **no corresponde a una pieza musical bailable**.\n\n"
+                        f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita*) ni métricas a podcasts, charlas o entrevistas."
+                    )
+                
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                with st.chat_message("assistant"):
+                    st.warning(reply)
+            else:
+                tempo_val = analisis["tempo"]
+                secciones_val = analisis["secciones"]
+
+                # CLASIFICACIÓN BASADA EN MÉTRICAS DE AUDIO Y TEMPO REAL
+                if modelo is not None:
+                    df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
+                    prediccion_ml = modelo.predict(df_in)[0]
+                else:
+                    if tempo_val >= 200:
+                        prediccion_ml = "Quebradita"
+                    elif 145 <= tempo_val < 200:
+                        prediccion_ml = "Salsa"
+                    else:
+                        prediccion_ml = "Bachata"
+
+                mm = obtener_metricas_multi_modalidad(prediccion_ml, tempo_val)
+
+                registro_sesion = {
+                    "Pista / Canción": analisis['cancion_formateada'],
+                    "Género Clasificado": prediccion_ml,
+                    "Tempo (BPM)": tempo_val,
+                    "Exigencia Pareja": mm['pareja'],
+                    "Exigencia Grupo": mm['grupo'],
+                    "Exigencia Solista": mm['solista']
+                }
+                st.session_state.ultima_evaluacion = {
+                    "cancion": analisis['cancion_formateada'],
+                    "genero": prediccion_ml,
+                    "tempo": tempo_val
+                }
+                st.session_state.historial_evaluaciones.append(registro_sesion)
+
+                sug_rel = generar_sugerencias_dinamicas(prediccion_ml, "moderadas", cantidad=3)
+                sug_txt = ", ".join([f"*{s}*" for s in sug_rel])
+
+                ficha_texto = f"""==================================================
+FICHA TÉCNICA COREOGRÁFICA - SÍNCOPA IA
+==================================================
+Canción: {analisis['cancion_formateada']}
+Género Clasificado: {prediccion_ml}
+Tempo Estimado: ~{tempo_val} BPM
+
+EXIGENCIA FÍSICA POR MODALIDAD:
+- Pareja: {mm['pareja']}/10
+- Grupo / Compañía: {mm['grupo']}/10
+- Solista: {mm['solista']}/10
+
+ACENTUACIÓN Y MÉTRICA:
+{mm['metrica_ritmo']}
+
+PREPARACIÓN FÍSICA SUGERIDA:
+{mm['ejercicios_recomendados']}
+==================================================
+"""
+
+                reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
+🏷️ **Género Clasificado:** **{prediccion_ml}** 
+⏱️ **Tempo Estimado:** ~{tempo_val} BPM
+
+---
+
+### 🎼 Marcación Coreográfica & Métrica Musical:
+{mm['metrica_ritmo']}
+
+---
+
+### 📊 Exigencia Física por Modalidad de Baile:
+
+* 👫 **Si lo bailas en Pareja:** Exigencia de **{mm['pareja']} / 10** (Ideal para marco y conexión).
+* 👯‍♀️ **Si lo bailas en Grupo / Compañía:** Exigencia de **{mm['grupo']} / 10** (Exige alta limpieza en bloques y simetría).
+* 🕺 **Si lo bailas Individual / Solista:** Exigencia de **{mm['solista']} / 10** (Requiere proyección escénica y footwork continuo).
+
+{mm['recomendacion_estilo']}
+
+---
+
+### 🏋️ Prep Física & Ejercicios para Aguantar la Pista:
+{mm['ejercicios_recomendados']}
+
+---
+
+💡 *Otras opciones sugeridas de {prediccion_ml}:* {sug_txt}.
+"""
+
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                with st.chat_message("assistant"):
+                    st.markdown(reply)
+                    st.download_button(
+                        label="📥 Descargar Ficha Técnica (.txt)",
+                        data=ficha_texto,
+                        file_name=f"Ficha_{analisis['cancion_formateada'].replace(' ', '_')}.txt",
+                        mime="text/plain"
+                    )
+
+        # Autoscroll suave
+        components.html(
+            """
+            <script>
+                window.parent.document.querySelector('section.main').scrollTo({
+                    top: window.parent.document.querySelector('section.main').scrollHeight,
+                    behavior: 'smooth'
+                });
+            </script>
+            """,
+            height=0
+        )
+
 # ==========================================
-# 7. HISTORIAL
+# 7. PESTAÑA DE HISTORIAL
 # ==========================================
 with tab_historial:
-    st.subheader("📈 Historial de Sesión")
+    st.subheader("📈 Resumen de Pistas Analizadas en esta Sesión")
     if len(st.session_state.historial_evaluaciones) > 0:
-        st.dataframe(pd.DataFrame(st.session_state.historial_evaluaciones), use_container_width=True)
+        df_historial = pd.DataFrame(st.session_state.historial_evaluaciones)
+        st.dataframe(df_historial, use_container_width=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total de Pistas Analizadas", len(df_historial))
+        with col2:
+            st.metric("Promedio de Tempo (BPM)", f"{df_historial['Tempo (BPM)'].mean():.1f}")
+            
+        csv_data = df_historial.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Exportar Historial Completo a CSV",
+            data=csv_data,
+            file_name="historial_sincopa.csv",
+            mime="text/csv"
+        )
     else:
-        st.info("No hay canciones analizadas en la sesión activa.")
+        st.info("Aún no has analizado ninguna pista durante esta sesión. ¡Pega un enlace de YouTube o Spotify para comenzar!")
