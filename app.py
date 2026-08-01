@@ -46,7 +46,7 @@ MENSAJE_BIENVENIDA = """👋 **¡Hola! Soy Síncopa, tu asistente de análisis c
 1. 🎧 **Analiza una canción:** Pega cualquier enlace de **Spotify, YouTube, SoundCloud o Apple Music**.
 2. 🔀 **Motor de Clasificación por Audio:** Analiza parámetros acústicos (*Tempo/BPM, pulsos/beats, densidad percusiva*).
 3. 🎙️ **Detección Inteligente:** Distingue entre plataformas de música y videos de pláticas o realities.
-4. 💬 **Consultas directas:** Pídeme listas de canciones o tips de ensayo para **Salsa, Bachata, Quebradita o Timba**.
+4. 💃 **Aprovechamiento Coreográfico:** Te sugiere en qué enfocar la pista (*Footwork, Shines, Nudos, Acrobacias, etc.*).
 
 ---
 💡 *Pega un enlace o escribe tu consulta abajo para comenzar.*"""
@@ -99,7 +99,7 @@ def analizar_perfil_acustico(url):
     url_lower = url.lower()
     titulo_lower = nombre_visual.lower()
 
-    # 1. PLATAFORMAS DE MÚSICA DIRECTA
+    # 1. PLATAFORMAS MÚSICA PURA
     es_plataforma_musical = any(p in url_lower for p in ["spotify.com/track", "music.apple.com", "soundcloud.com"])
 
     # 2. FILTRO DE PROGRAMAS/REALITIES
@@ -116,7 +116,7 @@ def analizar_perfil_acustico(url):
     seed_val = sum(ord(c) for c in url)
     random.seed(seed_val)
 
-    # Detección de palabras clave para calibrar atributos de Timba / Salsa
+    # Detección para calibración de atributos
     keywords_timba = ["timba", "timbalive", "van van", "havana", "maykel blanco", "alexander abreu", "pupy"]
     keywords_salsa = ["salsa", "guaguanco", "mambo", "son", "orquesta", "marc anthony", "fania"]
     
@@ -163,46 +163,46 @@ def clasificar_genero_por_audio(features):
     acousticness = features['acousticness']
     num_secciones = features['num_secciones']
 
-    # 1. Quebradita: Tempo muy acelerado y alta energía
     if tempo >= 170 and energy >= 0.80:
         return "Quebradita"
 
-    # 2. Timba: Gran densidad polirrítmica (tatum elevado), energía alta y múltiples secciones
     if tatum >= 3.7 and energy >= 0.80 and num_secciones >= 6:
         return "Timba"
 
-    # 3. Salsa: Densidad rítmica sostenida y tempo típico de salsa
     if tatum >= 3.2 and energy >= 0.65:
         return "Salsa"
 
-    # 4. Bachata: Solo si el tempo es más moderado y la densidad de percusión es menor
     if tempo <= 138 and (acousticness > 0.30 or tatum < 3.2):
         return "Bachata"
 
     return "Timba" if energy > 0.80 else "Salsa"
 
-def obtener_metricas_multi_modalidad(genero, tempo):
+def obtener_aprovechamiento_coreografico(genero):
     if genero == "Bachata":
-        pareja, grupo, solista = 8, 6, 7
-        metrica = "📌 Métrica: Compás de 4/4. Acentuación en el pulso 4 y 8 con tap/golpe de cadera.\n📌 Estructura: Alternancia entre majao, mambo y derecho."
-        ejercicios = "• Disociación torácica y pélvica.\n• Transferencia fluida de peso y fuerza en tobillos."
-    elif genero == "Quebradita":
-        pareja, grupo, solista = 10, 9, 8
-        metrica = "📌 Métrica: Compás de 2/4 acelerado. Acentuación fuerte en el bote/brinco.\n📌 Estructura: Secciones dinámicas con giros continuos y acrobacias."
-        ejercicios = "• Potencia pliométrica.\n• Estabilidad de core para alzadas."
-    elif genero == "Timba":
-        pareja, grupo, solista = 9, 9, 9
-        metrica = "📌 Métrica: Clave Cubana / Timba (2/3 o 3/2). Polirritmia compleja y tumbaos marcados.\n📌 Estructura: Intro, verso, montuno, mambo, presión y despelote."
-        ejercicios = "• Disociación corporal completa y muelles de rodilla.\n• Resistencia física para cambios de intensidad."
-    else:  # Salsa
-        pareja, grupo, solista = 9, 8, 9
-        metrica = "📌 Métrica: Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos en campana y tumbao.\n📌 Estructura: Intro, verso, montuno, mambo y cierre."
-        ejercicios = "• Agilidad de pies (footwork/shines).\n• Control del marco postural."
+        metrica = "📌 **Métrica:** Compás de 4/4. Acentuación en el pulso 4 y 8 con tap / golpe de cadera.\n📌 **Estructura:** Transición marcada entre majao, mambo y derecho."
+        aprovechamiento = """• **Baile en Pareja:** Trabajo de conexión corporal estrecha, marcación de marcos suaves y conducción en guillete/ondas.
+• **Ondas & Body Rolls:** Ideal para disociación de torso y cadera en tiempos lentos o acentuaciones melódicas.
+• **Footwork Sincopado:** Modulaciones de paso en secciones de mambo y acentos de requinto."""
 
-    return {
-        "pareja": pareja, "grupo": grupo, "solista": solista,
-        "metrica_ritmo": metrica, "ejercicios_recomendados": ejercicios
-    }
+    elif genero == "Quebradita":
+        metrica = "📌 **Métrica:** Compás de 2/4 acelerado. Acentuación constante en el bote o brinco.\n📌 **Estructura:** Secciones dinámicas continuas con cambios bruscos de tempo."
+        aprovechamiento = """• **Acrobacias y Alzadas:** Trabajo de cargadas de alto impacto, caídas y remates espectaculares.
+• **Giros y Quebraditas:** Ejecución de giros veloces en pareja y quiebres de cintura (quebradita tradicional).
+• **Paso Machete & Bote:** Trabajo dinámico de pies y muelles coordinados a máxima velocidad."""
+
+    elif genero == "Timba":
+        metrica = "📌 **Métrica:** Clave Cubana / Timba (2/3 o 3/2). Polirritmia compleja, tumbaos marcados y cortes potentes.\n📌 **Estructura:** Intro, verso, montuno, mambo, presión y despelote."
+        aprovechamiento = """• **Nudos y Figuras Casino:** Complejidad en el trabajo de brazos (rueda o pareja), cambios rápidos de dirección y enganches.
+• **Despelote & Muelleo:** Secciones de soltar la pareja para trabajo de cintura, hombros y muelles de rodilla con la percusión.
+• **Shines y Rumba Cubana:** Desmontes con incorporación de pasos de Guaguancó, Columbia o Afrocubano en los cortes de metales."""
+
+    else:  # Salsa
+        metrica = "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos marcados en campana, tumbao y metales.\n📌 **Estructura:** Intro, verso, montuno, mambo y cierre."
+        aprovechamiento = """• **Shines & Footwork:** Trabajo veloz de pies, cortes rítmicos y repiques en las secciones instrumentales.
+• **Vueltas en Pareja (Spinning):** Giros múltiples, figuras rápidas de brazos y control del marco postural.
+• **Estilo y Musicalidad:** Acentuación con brazos y torso para interpretar las subidas de los metales y golpes de timbal."""
+
+    return metrica, aprovechamiento
 
 # ==========================================
 # CATÁLOGOS Y RESPUESTAS LIBRES
@@ -230,7 +230,7 @@ def responder_consulta_texto(prompt):
     elif pide_salsa:
         return "🎺 **Sugerencias de Salsa:**\n\n" + "\n".join([f"• {c}" for c in random.sample(CATALOGO_DINAMICO["salsa"], 2)])
     else:
-        return "💡 Pega un enlace de audio para clasificarlo o pídeme sugerencias/tips de ensayo para **Salsa, Bachata, Quebradita o Timba**."
+        return "💡 Pega un enlace de audio para clasificarlo o pídeme sugerencias de **Salsa, Bachata, Quebradita o Timba**."
 
 # ==========================================
 # 4. INTERFAZ STREAMLIT
@@ -284,21 +284,10 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
                 else:
                     tempo_val = analisis["tempo"]
-                    df_in = pd.DataFrame([{
-                        'tempo': analisis['tempo'],
-                        'danceability': analisis['danceability'],
-                        'energy': analisis['energy'],
-                        'valence': analisis['valence'],
-                        'speechiness': analisis['speechiness'],
-                        'acousticness': analisis['acousticness'],
-                        'densidad_tatum': analisis['densidad_tatum'],
-                        'num_secciones': analisis['num_secciones']
-                    }])
-
-                    # Priorizar regla directa si no hay modelo joblib cargado o si el modelo cae en ambigüedad
                     prediccion_ml = clasificar_genero_por_audio(analisis)
                     st.session_state.ultimo_genero = prediccion_ml
-                    mm = obtener_metricas_multi_modalidad(prediccion_ml, tempo_val)
+                    
+                    metrica_text, aprovechamiento_text = obtener_aprovechamiento_coreografico(prediccion_ml)
 
                     reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
@@ -307,14 +296,12 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 ---
 
 ### 🎼 Marcación Coreográfica & Métrica Musical:
-{mm['metrica_ritmo']}
+{metrica_text}
 
 ---
 
-### 📊 Exigencia Física por Modalidad de Baile:
-* 👫 **Pareja:** {mm['pareja']} / 10
-* 👯‍♀️ **Grupo:** {mm['grupo']} / 10
-* 🕺 **Solista:** {mm['solista']} / 10
+### 💡 Aprovechamiento Coreográfico Recomendado:
+{aprovechamiento_text}
 """
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
