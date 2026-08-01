@@ -34,7 +34,7 @@ if os.path.exists(ruta_modelo):
 ARTISTAS_Y_ESTILOS = {
     "Quebradita": {
         "artistas": ["Banda Machos", "Los Tucanes de Tijuana", "Banda Arkangel R-15", "Banda Yuri", "Mi Banda El Mexicano", "Banda Maguey", "Banda Cuisillos", "Banda Pequeños Musical"],
-        "canciones_rapidas": ["La Culebra", "El Baile del Caballito", "Al Gato y al Ratón", "La Chona", "El Tucanazo", "No Bailes de Caballito", "La Niña Fresa"],
+        "canciones_rapidas": ["La Culebra", "El Baile del Caballito", "Al Gato y al Ratón", "La Chona", "El Tucanazo", "No Bailes de Caballito", "La Niña Fresa", "La Quebradora"],
         "canciones_moderadas": ["Vampiro", "La Roncona", "El Apagón", "Eva María", "Ramito de Violetas", "El Sonidito (Versión Banda)"],
         "canciones_lentas": ["Lindo Michoacán", "Un Indio Quiere Llorar", "Corrido de los Pérez", "Casas de Madera"],
         "canciones_principiantes": ["La Roncona", "El Apagón", "La Chona (a tiempo base)", "Ramito de Violetas"]
@@ -55,7 +55,7 @@ ARTISTAS_Y_ESTILOS = {
     }
 }
 
-# 3. INICIALIZACIÓN DE ESTADOS DE SESIÓN Y BIENVENIDA (ONBOARDING)
+# 3. INICIALIZACIÓN DE ESTADOS DE SESIÓN Y BIENVENIDA
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -87,7 +87,6 @@ if "historial_evaluaciones" not in st.session_state:
 
 # 4. FUNCIONES DE EXTRACCIÓN Y ANÁLISIS
 def obtener_titulo_desde_link(url):
-    # 1. Endpoint oEmbed de YouTube (Rápido, oficial y no bloqueable por servidores cloud)
     if "youtube.com" in url or "youtu.be" in url:
         try:
             oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
@@ -98,7 +97,6 @@ def obtener_titulo_desde_link(url):
         except Exception:
             pass
 
-    # 2. Para otros enlaces (Spotify, SoundCloud, Apple Music)
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
@@ -144,23 +142,40 @@ def analizar_pista(query):
 
     hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
 
-    tokens_quebradita = ["quebradita", "quebraditas", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", "tucanes", "vampiro", "chona", "maguey", "cuisillos"]
-    tokens_bachata = ["bachata", "bachatas", "sensual", "bolero", "slow", "suave", "romantica", "romeo", "aventura", "prince", "royce", "guerra", "monchy", "alexandra", "propuesta", "darte", "obsesion"]
-    tokens_salsa = ["salsa", "salsas", "mambo", "guaguanco", "son", "timba", "marc anthony", "lavoe", "colon", "arroyo", "niche", "roena", "santiago", "rebelion", "aguanile"]
+    # Tokens ampliados para detección estricta por palabras clave
+    tokens_quebradita = [
+        "quebradita", "quebraditas", "quebradora", "banda", "zapateado", "brinco", 
+        "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", 
+        "tucanes", "vampiro", "chona", "maguey", "cuisillos", "mexicano"
+    ]
+    tokens_bachata = [
+        "bachata", "bachatas", "sensual", "bolero", "slow", "suave", "romantica", 
+        "romeo", "aventura", "prince", "royce", "guerra", "monchy", "alexandra", 
+        "propuesta", "darte", "obsesion"
+    ]
+    tokens_salsa = [
+        "salsa", "salsas", "mambo", "guaguanco", "son", "timba", "marc anthony", 
+        "lavoe", "colon", "arroyo", "niche", "roena", "santiago", "rebelion", "aguanile"
+    ]
 
     cadena_eval = (query + " " + cancion_nombre).lower()
 
+    # Evaluación de prioridades
     if any(w in cadena_eval for w in tokens_quebradita):
-        tempo_base = 220.0 + (hash_val % 35)
+        genero_forzado = "Quebradita"
+        tempo_base = 230.0 + (hash_val % 30)
         secciones_base = 12
     elif any(w in cadena_eval for w in tokens_bachata):
-        tempo_base = 105.0 + (hash_val % 35)
+        genero_forzado = "Bachata"
+        tempo_base = 105.0 + (hash_val % 30)
         secciones_base = 7
     elif any(w in cadena_eval for w in tokens_salsa):
-        tempo_base = 160.0 + (hash_val % 45)
+        genero_forzado = "Salsa"
+        tempo_base = 165.0 + (hash_val % 40)
         secciones_base = 9
     else:
-        tempo_base = 120.0 + (hash_val % 70)
+        genero_forzado = None
+        tempo_base = 135.0 + (hash_val % 50)
         secciones_base = 8
 
     return {
@@ -168,13 +183,12 @@ def analizar_pista(query):
         "es_link": es_link,
         "tempo": round(tempo_base, 1),
         "secciones": secciones_base,
-        "cancion_formateada": cancion_nombre
+        "cancion_formateada": cancion_nombre,
+        "genero_forzado": genero_forzado
     }
 
 def obtener_metricas_multi_modalidad(genero_predicho, tempo):
     """Calcula la exigencia física dinámicamente según los BPM reales de la canción."""
-    
-    # Factor de escala según el tempo (BPM)
     if tempo < 130:
         factor_bpm = 4.5 + (tempo - 90) * 0.05
     elif tempo < 180:
@@ -212,7 +226,6 @@ def obtener_metricas_multi_modalidad(genero_predicho, tempo):
         )
         metrica_ritmo = "⏱️ **Estructura Métrica:** Compás 4/4 (Fraseo de 8 tiempos).\n👉 **Acentuación:** Pasos en **1, 2, 3** con **Tap / Golpe de Cadera** en el tiempo **4** (y **5, 6, 7** con Tap en **8**)."
 
-    # Cálculo dinámico final delimitado de 1.0 a 10.0
     p_pareja = round(min(10.0, max(1.0, base)), 1)
     p_grupo = round(min(10.0, max(1.0, base + 1.2)), 1)
     p_solista = round(min(10.0, max(1.0, base + 0.8)), 1)
@@ -227,7 +240,6 @@ def obtener_metricas_multi_modalidad(genero_predicho, tempo):
     }
 
 def generar_sugerencias_dinamicas(genero, filtro, cantidad=3):
-    """Genera combinaciones de canciones impredecibles en cada llamada."""
     gen_data = ARTISTAS_Y_ESTILOS.get(genero, ARTISTAS_Y_ESTILOS["Bachata"])
     artistas = gen_data["artistas"]
     
@@ -281,7 +293,7 @@ def procesar_sub_peticion(sub_prompt):
     canciones_dinamicas = generar_sugerencias_dinamicas(gen, filtro)
     return gen, etiqueta, canciones_dinamicas
 
-# 5. PESTAÑAS PRINCIPALES (CHAT VS HISTORIAL)
+# 5. PESTAÑAS PRINCIPALES
 tab_chat, tab_historial = st.tabs(["💬 Asistente Conversacional", "📊 Historial de Análisis"])
 
 with tab_chat:
@@ -340,7 +352,6 @@ with tab_chat:
 
         elif any(w in p_lower for w in ["sugerencia", "sugerencias", "sugieres", "sugiere", "recomienda", "opciones", "lista", "listas", "bachata", "bachatas", "salsa", "salsas", "quebradita", "quebraditas"]):
             partes = re.split(r',| y | e ', p_lower)
-            
             bloques_respuesta = []
             for parte in partes:
                 if parte.strip():
@@ -370,13 +381,15 @@ with tab_chat:
                 tempo_val = analisis["tempo"]
                 secciones_val = analisis["secciones"]
 
-                if modelo is not None:
+                # Regla del Ensamblado Híbrido: Prioridad a palabras clave
+                if analisis.get("genero_forzado"):
+                    prediccion_ml = analisis["genero_forzado"]
+                elif modelo is not None:
                     df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
                     prediccion_ml = modelo.predict(df_in)[0]
                 else:
                     prediccion_ml = "Quebradita" if tempo_val > 210 else ("Bachata" if tempo_val < 135 else "Salsa")
 
-                # Pasa el tempo_val para calcular exigencia dinámica real
                 mm = obtener_metricas_multi_modalidad(prediccion_ml, tempo_val)
 
                 registro_sesion = {
@@ -457,7 +470,7 @@ PREPARACIÓN FÍSICA SUGERIDA:
                         mime="text/plain"
                     )
 
-# 6. PESTAÑA DE HISTORIAL Y MÉTRICAS ACUMULADAS
+# 6. PESTAÑA DE HISTORIAL
 with tab_historial:
     st.subheader("📈 Resumen de Pistas Analizadas en esta Sesión")
     if len(st.session_state.historial_evaluaciones) > 0:
