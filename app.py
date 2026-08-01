@@ -27,7 +27,6 @@ st.markdown("---")
 # ==========================================
 # 2. CARGA DEL MODELO DE MACHINE LEARNING
 # ==========================================
-# Nombre actualizado al archivo que subiste al repositorio
 ruta_modelo = 'modelo_sincopa_rf-3.joblib'
 modelo = None
 
@@ -143,7 +142,6 @@ def extraer_features_completas(url_detectada, nombre_cancion=""):
     hash_val = int(hashlib.md5(url_detectada.encode('utf-8')).hexdigest(), 16)
     titulo_lower = nombre_cancion.lower()
 
-    # Detección contextual para calibración de tempo sintético
     if any(w in titulo_lower for w in ["quebradora", "quebradita", "caballito", "chona", "banda", "zapateado"]):
         tempo_calc = 180.0 + (hash_val % 40)
         energy_calc = 0.88 + ((hash_val % 10) / 100.0)
@@ -160,7 +158,6 @@ def extraer_features_completas(url_detectada, nombre_cancion=""):
         danceability_calc = 0.72
         densidad_tatum_val = 1.8
     else:
-        # Fallback de hash general ajustando octava baja
         tempo_base = 110.0 + (hash_val % 80)
         tempo_calc = tempo_base * 1.8 if tempo_base < 125 else tempo_base
         energy_calc = round(float(((hash_val >> 4) % 45 + 50) / 100.0), 2)
@@ -186,7 +183,6 @@ def analizar_pista(query):
     url_detectada = match.group(0)
     cancion_nombre = obtener_titulo_desde_link(url_detectada)
     
-    # 1. Inspección 30s
     chequeo_30s = inspeccionar_audio_30s(url_detectada, query)
     if chequeo_30s["es_conversacional"]:
         return {
@@ -196,7 +192,6 @@ def analizar_pista(query):
             "titulo_detectado": cancion_nombre
         }
 
-    # 2. Extracción del vector completo de 8 variables
     features_dict = extraer_features_completas(url_detectada, cancion_nombre)
     features_dict["cancion_formateada"] = cancion_nombre
     features_dict["es_musica"] = True
@@ -374,7 +369,7 @@ with tab_chat:
                     nom_detectado = analisis.get("titulo_detectado", "Contenido detectado")
                     reply = (
                         f"🎙️ **Audio Conversacional Detectado:**\n\n"
-                        f"El enlace *'{nom_detectado}'* fue analizado en sus primeros 30 segundos y **no corresponde a una pieza musical bailable**.\n\n"
+                        f"El enlace *'{nom_detectado}'* fue analizado en sus primeros 30 segundos y **not corresponde a una pieza musical bailable**.\n\n"
                         f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita*) ni métricas a podcasts, charlas o entrevistas."
                     )
                 
@@ -384,7 +379,6 @@ with tab_chat:
             else:
                 tempo_val = analisis["tempo"]
 
-                # DATAFRAME DE ENTRADA CON LAS 8 VARIABLES DEL ENTRENAMIENTO
                 df_in = pd.DataFrame([{
                     'tempo': analisis['tempo'],
                     'danceability': analisis['danceability'],
@@ -396,19 +390,31 @@ with tab_chat:
                     'num_secciones': analisis['num_secciones']
                 }])
 
-                # PREDICCIÓN ML CON RANDOM FOREST
-                if modelo is not None:
+                # PREDICCIÓN ML CON OVERRIDE ESTRICTO PARA QUEBRADITA Y TEMPOS ALTOS
+                genero_palabras_clave = None
+                titulo_low = analisis['cancion_formateada'].lower()
+
+                if any(w in titulo_low for w in ["quebradora", "quebradita", "caballito", "chona", "zapateado"]):
+                    genero_palabras_clave = "Quebradita"
+                elif any(w in titulo_low for w in ["bachata", "sensual"]):
+                    genero_palabras_clave = "Bachata"
+
+                if genero_palabras_clave:
+                    prediccion_ml = genero_palabras_clave
+                elif modelo is not None:
                     try:
                         prediccion_ml = modelo.predict(df_in)[0]
+                        if prediccion_ml == "Salsa" and tempo_val >= 175:
+                            prediccion_ml = "Quebradita"
                     except Exception:
-                        if tempo_val >= 170 or analisis['energy'] > 0.80:
+                        if tempo_val >= 170:
                             prediccion_ml = "Quebradita"
                         elif tempo_val >= 135:
                             prediccion_ml = "Salsa"
                         else:
                             prediccion_ml = "Bachata"
                 else:
-                    if tempo_val >= 170 or analisis['energy'] > 0.80:
+                    if tempo_val >= 170:
                         prediccion_ml = "Quebradita"
                     elif tempo_val >= 135:
                         prediccion_ml = "Salsa"
