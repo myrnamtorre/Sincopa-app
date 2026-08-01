@@ -55,7 +55,7 @@ ARTISTAS_Y_ESTILOS = {
     }
 }
 
-# 3. INICIALIZACIÓN DE ESTADOS DE SESIÓN
+# 3. INICIALIZACIÓN DE ESTADOS DE SESIÓN Y BIENVENIDA (ONBOARDING)
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -85,11 +85,23 @@ if "ultimo_genero_sugerido" not in st.session_state:
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
-# 4. FUNCIONES DE EXTRACCIÓN Y GENERACIÓN DINÁMICA
+# 4. FUNCIONES DE EXTRACCIÓN Y ANÁLISIS
 def obtener_titulo_desde_link(url):
+    # 1. Si es de YouTube, usamos el endpoint oEmbed oficial (rápido, gratis y sin bloqueos de servidor)
+    if "youtube.com" in url or "youtu.be" in url:
+        try:
+            oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
+            res = requests.get(oembed_url, timeout=3)
+            if res.status_code == 200:
+                datos = res.json()
+                return datos.get("title", "Canción de YouTube")
+        except Exception:
+            pass
+
+    # 2. Para otros enlaces (Spotify, SoundCloud, Apple Music), scraping con User-Agent
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
         }
         response = requests.get(url, headers=headers, timeout=4)
         
@@ -198,7 +210,7 @@ def obtener_metricas_multi_modalidad(genero_predicho):
     }
 
 def generar_sugerencias_dinamicas(genero, filtro, cantidad=3):
-    """Genera combinaciones de canciones de forma dinámica e impredecible."""
+    """Genera combinaciones variadas e impredecibles en cada consulta."""
     gen_data = ARTISTAS_Y_ESTILOS.get(genero, ARTISTAS_Y_ESTILOS["Bachata"])
     artistas = gen_data["artistas"]
     
@@ -206,14 +218,12 @@ def generar_sugerencias_dinamicas(genero, filtro, cantidad=3):
     if clave_cancion in gen_data:
         canciones = gen_data[clave_cancion]
     else:
-        # Si pide algo variado o sin filtro exacto, junta todas las canciones disponibles
         canciones = (
             gen_data.get("canciones_rapidas", []) + 
             gen_data.get("canciones_lentas", []) + 
             gen_data.get("canciones_moderadas", [])
         )
 
-    # Muestreo aleatorio dinámico
     canciones_seleccionadas = random.sample(canciones, min(len(canciones), cantidad))
     artistas_seleccionados = random.sample(artistas, min(len(artistas), cantidad))
 
@@ -251,9 +261,7 @@ def procesar_sub_peticion(sub_prompt):
         filtro = "variadas"
         etiqueta = "Variadas y Populares"
 
-    # Generar de forma 100% aleatoria y dinámica en cada petición
     canciones_dinamicas = generar_sugerencias_dinamicas(gen, filtro)
-
     return gen, etiqueta, canciones_dinamicas
 
 # 5. PESTAÑAS PRINCIPALES (CHAT VS HISTORIAL)
@@ -367,7 +375,6 @@ with tab_chat:
                 }
                 st.session_state.historial_evaluaciones.append(registro_sesion)
 
-                # Opciones dinámicas relacionadas
                 sug_rel = generar_sugerencias_dinamicas(prediccion_ml, "variadas", cantidad=3)
                 sug_txt = ", ".join([f"*{s}*" for s in sug_rel])
 
