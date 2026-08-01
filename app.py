@@ -32,7 +32,7 @@ st.markdown("""
         font-size: 1.1rem;
         color: #457B9D;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
     }
     .stChatMessage {
         border-radius: 12px;
@@ -125,8 +125,6 @@ def analizar_pista(url):
     tempo_30s = random.randint(100, 195)
 
     # GUARDRAIL TÉCNICO (Sin lectura de palabras):
-    # Si en los primeros 30s la voz hablada domina (>0.35) o la métrica bailable es baja (<0.40),
-    # se cataloga como audio conversacional / plática y Síncopa no asigna género.
     if speechiness_30s > 0.35 or danceability_30s < 0.40:
         return {
             "es_musica": False,
@@ -154,41 +152,28 @@ def obtener_metricas_multi_modalidad(genero, tempo):
         pareja, grupo, solista = 8, 6, 7
         metrica = "📌 **Métrica:** Compás de 4/4. Acentuación en el pulso 4 y 8 con tap/golpe de cadera (síncopa suave).\n📌 **Estructura:** Alternancia entre majao, mambo y derecho."
         ejercicios = "• Disociación torácica y pélvica.\n• Transferencia fluida de peso y fuerza en tobillos."
-        estilo = "💡 *Recomendación:* Priorizar la fluidez corporal e interpretar los cambios de sección (punteo vs. mambo)."
     elif genero == "Quebradita":
         pareja, grupo, solista = 10, 9, 8
         metrica = "📌 **Métrica:** Compás de 2/4 acelerado. Acentuación fuerte y continua en el bote/brinco.\n📌 **Estructura:** Secciones dinámicas con giros continuos y acrobacias."
         ejercicios = "• Potencia pliométrica (saltos verticales y absorción de impacto).\n• Estabilidad de core para alzadas y cargadas."
-        estilo = "💡 *Recomendación:* Mantener el centro de gravedad bajo para estabilidad en giros."
     else:  # Salsa
         pareja, grupo, solista = 9, 8, 9
         metrica = "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos marcados en campana y tumbao.\n📌 **Estructura:** Intro, verso, montuno, mambo y descarga."
         ejercicios = "• Agilidad de pies (shines/footwork) y reacción rápida.\n• Control del marco postural en pareja."
-        estilo = "💡 *Recomendación:* Mantener la velocidad de reacción en los cortes de percusión."
 
     return {
         "pareja": pareja,
         "grupo": grupo,
         "solista": solista,
         "metrica_ritmo": metrica,
-        "ejercicios_recomendados": ejercicios,
-        "recomendacion_estilo": estilo
+        "ejercicios_recomendados": ejercicios
     }
-
-def generar_sugerencias_dinamicas(genero, cantidad=3):
-    catalogo = {
-        "Bachata": ["Obsesión - Aventura", "Propuesta Indecente - Romeo Santos", "Sobredosis - Romeo Santos", "Stand by Me - Prince Royce"],
-        "Quebradita": ["La Chona - Los Tucanes de Tijuana", "La Quebradora - Banda El Mexicano", "El Baile del Perrito - Wilfrido Vargas", "El Tucanazo - Los Tucanes de Tijuana"],
-        "Salsa": ["Llorarás - Oscar D'León", "Valió la Pena - Marc Anthony", "Rebelión - Joe Arroyo", "Periódico de Ayer - Héctor Lavoe"]
-    }
-    opciones = catalogo.get(genero, catalogo["Salsa"])
-    return random.sample(opciones, min(cantidad, len(opciones)))
 
 # ==========================================
-# 4. INTERFAZ STREAMLIT Y CHAT
+# 4. INTERFAZ STREAMLIT
 # ==========================================
 st.markdown('<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Análisis métrico de audio, clasificación e interpretación de ritmos</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Análisis métrico de audio e interpretación de ritmos</div>', unsafe_allow_html=True)
 
 tabs = st.tabs(["💬 Chat Asistente", "📊 Historial & Métricas", "ℹ️ Guía de Uso"])
 
@@ -200,8 +185,50 @@ with tabs[0]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Pega aquí el enlace de la canción (Spotify, YouTube, SoundCloud...)..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
+# ------------------------------------------
+# TAB 2: HISTORIAL Y MÉTRICAS
+# ------------------------------------------
+with tabs[1]:
+    st.subheader("📈 Resumen de Evaluaciones de la Sesión")
+    
+    if st.session_state.historial_evaluaciones:
+        df_hist = pd.DataFrame(st.session_state.historial_evaluaciones)
+        st.dataframe(df_hist, use_container_width=True)
+        
+        st.divider()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("##### Distribución por Géneros Analizados")
+            st.bar_chart(df_hist["Género Clasificado"].value_counts())
+        with col2:
+            st.markdown("##### Distribución de Tempos (BPM)")
+            st.line_chart(df_hist["Tempo (BPM)"])
+    else:
+        st.info("Aún no se han evaluado canciones en esta sesión. Analiza un enlace en el chat para ver aquí las métricas.")
+
+# ------------------------------------------
+# TAB 3: GUÍA DE USO
+# ------------------------------------------
+with tabs[2]:
+    st.subheader("📚 Guía de Uso del Asistente")
+    st.markdown("""
+    **Síncopa** es un asistente especializado para bailarines, maestros y coreógrafos.
+
+    ### 📌 ¿Cómo funciona?
+    1. **Pega la URL:** Ingresa un enlace válido de YouTube, Spotify, SoundCloud o Apple Music.
+    2. **Inspección de 30 Segundos:** Síncopa analiza las métricas de la señal de audio en los primeros 30s sin evaluar títulos ni nombres de texto.
+    3. **Guardrail Conversacional:** Si el audio es una plática, podcast o tutorial, la app frena la clasificación y permanece en silencio.
+    4. **Generación Coreográfica:** Para audios musicales, predice el ritmo (**Bachata, Salsa o Quebradita**) y ofrece la estructura métrica, exigencia física y ficha técnica descargable.
+    """)
+
+# ==========================================
+# 5. INPUT DEL CHAT (Anclado al final de la pantalla)
+# ==========================================
+if prompt := st.chat_input("Pega aquí el enlace de la canción (Spotify, YouTube, SoundCloud...)..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # Renderizar el mensaje ingresado en la pestaña del chat
+    with tabs[0]:
         with st.chat_message("user"):
             st.markdown(prompt)
 
@@ -273,9 +300,6 @@ with tabs[0]:
                     }
                     st.session_state.historial_evaluaciones.append(registro_sesion)
 
-                    sug_rel = generar_sugerencias_dinamicas(prediccion_ml, cantidad=3)
-                    sug_txt = ", ".join([f"*{s}*" for s in sug_rel])
-
                     ficha_texto = f"""==================================================
 FICHA TÉCNICA COREOGRÁFICA - SÍNCOPA IA
 ==================================================
@@ -313,16 +337,10 @@ PREPARACIÓN FÍSICA SUGERIDA:
 * 👯‍♀️ **Si lo bailas en Grupo / Compañía:** Exigencia de **{mm['grupo']} / 10** (Exige alta limpieza en bloques y simetría).
 * 🕺 **Si lo bailas Individual / Solista:** Exigencia de **{mm['solista']} / 10** (Requiere proyección escénica y footwork continuo).
 
-{mm['recomendacion_estilo']}
-
 ---
 
 ### 🏋️ Prep Física & Ejercicios para Aguantar la Pista:
 {mm['ejercicios_recomendados']}
-
----
-
-💡 *Otras opciones sugeridas de {prediccion_ml}:* {sug_txt}.
 """
                     st.markdown(reply)
                     st.download_button(
@@ -332,39 +350,3 @@ PREPARACIÓN FÍSICA SUGERIDA:
                         mime="text/plain"
                     )
                     st.session_state.messages.append({"role": "assistant", "content": reply})
-
-# ------------------------------------------
-# TAB 2: HISTORIAL Y MÉTRICAS
-# ------------------------------------------
-with tabs[1]:
-    st.subheader("📈 Resumen de Evaluaciones de la Sesión")
-    
-    if st.session_state.historial_evaluaciones:
-        df_hist = pd.DataFrame(st.session_state.historial_evaluaciones)
-        st.dataframe(df_hist, use_container_width=True)
-        
-        st.divider()
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("##### Distribución por Géneros Analizados")
-            st.bar_chart(df_hist["Género Clasificado"].value_counts())
-        with col2:
-            st.markdown("##### Distribución de Tempos (BPM)")
-            st.line_chart(df_hist["Tempo (BPM)"])
-    else:
-        st.info("Aún no se han evaluado canciones en esta sesión. Analiza un enlace en el chat para ver aquí las métricas.")
-
-# ------------------------------------------
-# TAB 3: GUÍA DE USO
-# ------------------------------------------
-with tabs[2]:
-    st.subheader("📚 Guía de Uso del Asistente")
-    st.markdown("""
-    **Síncopa** es un asistente especializado para bailarines, maestros y coreógrafos.
-
-    ### 📌 ¿Cómo funciona?
-    1. **Pega la URL:** Ingresa un enlace válido de YouTube, Spotify, SoundCloud o Apple Music.
-    2. **Inspección de 30 Segundos:** Síncopa analiza las métricas de la señal de audio en los primeros 30s sin evaluar títulos ni nombres de texto.
-    3. **Guardrail Conversacional:** Si el audio es una plática, podcast o tutorial, la app frena la clasificación y permanece en silencio.
-    4. **Generación Coreográfica:** Para audios musicales, predice el ritmo (**Bachata, Salsa o Quebradita**) y ofrece la estructura métrica, exigencia física y ficha técnica descargable.
-    """)
