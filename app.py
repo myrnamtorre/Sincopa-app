@@ -82,73 +82,37 @@ def obtener_titulo_desde_link(url):
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             if soup.title and soup.title.string:
-                tit = soup.title.string
-                return tit.replace("- song and lyrics by TIMBALIVE | Spotify", "").replace("| Spotify", "").strip()
+                return soup.title.string.strip()
     except Exception:
         pass
-    return ""
+    return "Pista de Audio"
 
 def analizar_perfil_acustico(url):
     if not es_url_valida(url):
         return {"es_musica": False, "razon": "requiere_link"}
 
     nombre_visual = obtener_titulo_desde_link(url)
-    if not nombre_visual:
-        nombre_visual = "Pista / Enlace de Audio"
+    
+    seed_val = sum(ord(c) for c in url)
+    random.seed(seed_val)
 
-    url_lower = url.lower()
-    titulo_lower = nombre_visual.lower()
+    # Generación pura basada en el hash de la URL (sin leer palabras clave del título)
+    tempo_est = random.randint(105, 178)
+    energy_val = round(random.uniform(0.50, 0.95), 2)
+    acoustic_val = round(random.uniform(0.10, 0.50), 2)
+    tatum_density = round(random.uniform(2.2, 4.6), 2)
+    num_secc = random.randint(4, 8)
+    speechiness_val = round(random.uniform(0.03, 0.35), 2)
 
-    # 1. PLATAFORMAS MÚSICA PURA
-    es_plataforma_musical = any(p in url_lower for p in ["spotify.com/track", "music.apple.com", "soundcloud.com"])
+    # Validación de contenido hablado basada estrictamente en speechiness o estructura anómala
+    es_hablado = speechiness_val > 0.28 or (energy_val < 0.55 and acoustic_val > 0.45)
 
-    # 2. FILTRO DE PROGRAMAS/REALITIES
-    palabras_platica = ["compra semanal", "reality", "capitulo", "noticias", "chisme", "reaccion", "podcast", "conversatorio"]
-    es_programa_hablado = any(kw in titulo_lower for kw in palabras_platica) and not es_plataforma_musical
-
-    if es_programa_hablado:
+    if es_hablado:
         return {
             "es_musica": False,
             "razon": "platica_detectada",
             "titulo_detectado": nombre_visual
         }
-
-    seed_val = sum(ord(c) for c in url)
-    random.seed(seed_val)
-
-    # Detección y calibración explícita para evitar falsos positivos
-    keywords_timba = ["timba", "timbalive", "van van", "havana", "maykel blanco", "alexander abreu", "pupy"]
-    keywords_salsa = ["salsa", "guaguanco", "mambo", "son", "orquesta", "marc anthony", "fania"]
-    keywords_bachata = ["bachata", "xtreme", "aventura", "romeo santos", "prince royce", "zacarias ferreira"]
-    
-    es_timba_evidente = any(k in titulo_lower or k in url_lower for k in keywords_timba)
-    es_salsa_evidente = any(k in titulo_lower or k in url_lower for k in keywords_salsa)
-    es_bachata_evidente = any(k in titulo_lower or k in url_lower for k in keywords_bachata)
-
-    if es_timba_evidente:
-        tempo_est = random.randint(150, 175)
-        energy_val = round(random.uniform(0.85, 0.98), 2)
-        acoustic_val = round(random.uniform(0.05, 0.20), 2)
-        tatum_density = round(random.uniform(3.8, 4.8), 2)
-        num_secc = random.randint(6, 9)
-    elif es_bachata_evidente:
-        tempo_est = random.randint(115, 132)
-        energy_val = round(random.uniform(0.55, 0.75), 2)
-        acoustic_val = round(random.uniform(0.30, 0.55), 2)
-        tatum_density = round(random.uniform(2.4, 3.1), 2)
-        num_secc = random.randint(4, 6)
-    elif es_salsa_evidente:
-        tempo_est = random.randint(140, 168)
-        energy_val = round(random.uniform(0.75, 0.92), 2)
-        acoustic_val = round(random.uniform(0.10, 0.30), 2)
-        tatum_density = round(random.uniform(3.4, 4.2), 2)
-        num_secc = random.randint(5, 8)
-    else:
-        tempo_est = random.randint(100, 180)
-        energy_val = round(random.uniform(0.70, 0.95), 2)
-        acoustic_val = round(random.uniform(0.05, 0.35), 2)
-        tatum_density = round(random.uniform(2.8, 4.5), 2)
-        num_secc = random.randint(4, 7)
 
     return {
         "es_musica": True,
@@ -157,7 +121,7 @@ def analizar_perfil_acustico(url):
         "danceability": round(random.uniform(0.65, 0.95), 2),
         "energy": energy_val,
         "valence": round(random.uniform(0.60, 0.92), 2),
-        "speechiness": round(random.uniform(0.05, 0.20), 2),
+        "speechiness": speechiness_val,
         "acousticness": acoustic_val,
         "densidad_tatum": tatum_density,
         "num_secciones": num_secc,
@@ -168,23 +132,25 @@ def clasificar_genero_por_audio(features):
     tempo = features['tempo']
     energy = features['energy']
     tatum = features['densidad_tatum']
-    acousticness = features['acousticness']
     num_secciones = features['num_secciones']
 
+    # 1. Quebradita: Tempo muy alto y alta energía
     if tempo >= 170 and energy >= 0.80:
         return "Quebradita"
 
-    if tatum >= 3.7 and energy >= 0.80 and num_secciones >= 6:
+    # 2. Timba: Alta densidad percusiva y múltiples secciones rítmicas
+    if tatum >= 3.8 and energy >= 0.82 and num_secciones >= 6:
         return "Timba"
 
-    # Validar Bachata antes de que la salsa atrape los valores intermedios
-    if tempo <= 138 and tatum < 3.3:
+    # 3. Bachata: Rango de tempo moderado/lento y densidad baja
+    if tempo <= 135 and tatum < 3.2:
         return "Bachata"
 
-    if tatum >= 3.2 and energy >= 0.65:
+    # 4. Salsa: Rango estándar de percusión y energía sostenida
+    if tatum >= 3.2 or energy >= 0.70:
         return "Salsa"
 
-    return "Timba" if energy > 0.80 else "Salsa"
+    return "Bachata" if tempo <= 140 else "Salsa"
 
 def obtener_detalles_coreograficos(genero):
     if genero == "Bachata":
@@ -193,6 +159,8 @@ def obtener_detalles_coreograficos(genero):
         aprovechamiento = """• **Baile en Pareja:** Trabajo de conexión corporal estrecha, marco fluido y conducción en guillete u ondas.
 • **Ondas & Body Rolls:** Ideal para disociación de torso y cadera en tiempos lentos o cortes melódicos.
 • **Footwork Sincopado:** Modulaciones de paso en secciones de mambo y acentos del requinto."""
+        vestuario = """• **Estilo:** Ropa estilizada semitransparente o ajustada para lucir las caderas y la disociación corporal.
+• **Calzado:** Zapatos de tacón alto delgado para ellas; zapatos de suela lisa o flexible para giros y desplazamientos de suelo para ellos."""
 
     elif genero == "Quebradita":
         pareja, grupo, solista = 10, 9, 8
@@ -200,6 +168,8 @@ def obtener_detalles_coreograficos(genero):
         aprovechamiento = """• **Acrobacias y Alzadas:** Trabajo de cargadas de alto impacto, caídas e impulsos espectaculares.
 • **Giros y Quebraditas:** Ejecución de giros veloces en pareja y quiebres de cintura.
 • **Paso Machete & Bote:** Trabajo dinámico de pies y muelles coordinados a máxima velocidad."""
+        vestuario = """• **Estilo:** Ropa vaquera moderna, camisas con flecos, chalecos y detalles brillantes.
+• **Calzado:** Botas vaqueras cómodas con suela de soporte para alto impacto y amortiguación en los botes."""
 
     elif genero == "Timba":
         pareja, grupo, solista = 9, 9, 9
@@ -207,6 +177,8 @@ def obtener_detalles_coreograficos(genero):
         aprovechamiento = """• **Nudos y Figuras Casino:** Complejidad en el trabajo de brazos (pareja o rueda), cambios de dirección y enganches rápidos.
 • **Despelote & Muelleo:** Secciones de soltar la pareja para trabajo libre de cintura, hombros y muelles de rodilla.
 • **Shines y Rumba Cubana:** Desmontes con incorporación de pasos de Guaguancó, Columbia o Afrocubano en los cortes de metales."""
+        vestuario = """• **Estilo:** Ropa urbana deportiva o casual elegante con alta flexibilidad para quiebres rápidos.
+• **Calzado:** Zapatillas de baile urbano o zapatos latinos de suela flexible para giros y control en giros secos."""
 
     else:  # Salsa
         pareja, grupo, solista = 9, 8, 9
@@ -214,8 +186,10 @@ def obtener_detalles_coreograficos(genero):
         aprovechamiento = """• **Shines & Footwork:** Trabajo veloz de pies, cortes rítmicos y repiques en las secciones instrumentales.
 • **Vueltas en Pareja (Spinning):** Giros múltiples, figuras rápidas de brazos y control del marco postural.
 • **Estilo y Musicalidad:** Acentuación con brazos y torso para interpretar las subidas de los metales y cierres de timbal."""
+        vestuario = """• **Estilo:** Ropa formal o semi-formal con brillo y movimiento (vestidos con vuelo para ellas, camisas entalladas para ellos).
+• **Calzado:** Zapatos de baile profesional con suela de ante/gamuza para control de fricción en giros."""
 
-    return pareja, grupo, solista, metrica, aprovechamiento
+    return pareja, grupo, solista, metrica, aprovechamiento, vestuario
 
 # ==========================================
 # CATÁLOGOS Y RESPUESTAS LIBRES
@@ -300,7 +274,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
                     prediccion_ml = clasificar_genero_por_audio(analisis)
                     st.session_state.ultimo_genero = prediccion_ml
                     
-                    par, grp, sol, metrica_text, aprovechamiento_text = obtener_detalles_coreograficos(prediccion_ml)
+                    par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = obtener_detalles_coreograficos(prediccion_ml)
 
                     reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
@@ -322,6 +296,11 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
 ### 💡 Aprovechamiento Coreográfico Recomendado:
 {aprovechamiento_text}
+
+---
+
+### 👗 Sugerencia de Vestuario:
+{vestuario_text}
 """
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
