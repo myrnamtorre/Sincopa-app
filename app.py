@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+import time
 import requests
 from bs4 import BeautifulSoup
 
@@ -92,7 +93,6 @@ def analizar_perfil_acustico(url):
     nombre_visual = obtener_titulo_desde_link(url)
     titulo_lower = nombre_visual.lower()
 
-    # Filtro estricto de contenido no musical (chismes, noticias, pláticas)
     palabras_platica = [
         "compra semanal", "reality", "capitulo", "noticias", "chisme", 
         "reaccion", "podcast", "conversatorio", "bullea", "falsos", 
@@ -108,11 +108,9 @@ def analizar_perfil_acustico(url):
             "titulo_detectado": nombre_visual
         }
 
-    # Extracción determinista basada en características del texto/URL para alimentar el modelo
     seed_val = sum(ord(c) for c in url)
     np.random.seed(seed_val)
 
-    # Si el enlace o título apunta claramente a Timba o Salsa brava, ajustamos el feature space base para el modelo
     if any(k in titulo_lower for k in ["timba", "timbalive", "maykel blanco", "alexander abreu", "van van"]):
         tempo = np.random.randint(155, 175)
         energy = round(np.random.uniform(0.85, 0.98), 2)
@@ -152,7 +150,6 @@ def analizar_perfil_acustico(url):
 def clasificar_genero_por_audio(features):
     global modelo
     
-    # Preparar vector de características para el modelo Random Forest
     X_input = pd.DataFrame([{
         'tempo': features['tempo'],
         'danceability': features['danceability'],
@@ -171,7 +168,6 @@ def clasificar_genero_por_audio(features):
         except Exception:
             pass
 
-    # Fallback lógico por si el modelo falla al cargar
     tempo = features['tempo']
     tatum = features['densidad_tatum']
     if tempo >= 170:
