@@ -85,7 +85,7 @@ if "messages" not in st.session_state:
                 "--- \n"
                 "### 🛑 Límites del servicio:\n"
                 "* ⚠️ **Importante:** Para analizar canciones específicas, **ingresa únicamente enlaces/links de audio o video**.\n"
-                "* ⚠️ *Contenido conversacional (Podcasts, Entrevistas, Charlas)* es detectado en los primeros 30s de señal y descartado automáticamente.\n"
+                "* ⚠️ *Contenido conversacional, tutoriales y programación* son detectados y descartados automáticamente.\n"
                 "* ⚠️ *Especializado exclusivamente en género tropical y latino:* **Bachata, Salsa y Quebradita**."
             )
         }
@@ -126,15 +126,20 @@ def obtener_titulo_desde_link(url):
     
     return "Enlace Externo"
 
-def inspeccionar_audio_30s(url, texto_user):
-    palabras_podcast = [
+def inspeccionar_audio_30s(url, texto_user, titulo_contenido=""):
+    # Palabras clave ampliadas para detectar podcasts, tutoriales, tecnología y programación
+    palabras_no_musicales = [
         "podcast", "episodio", "episode", "entrevista", "interview", "vlog",
         "hablando", "charlando", "conversación", "talk", "dialogo", "discurso",
-        "conferencia", "capítulo", "capitulo", "host", "stream", "hablado"
+        "conferencia", "capítulo", "capitulo", "host", "stream", "hablado",
+        "tutorial", "deploy", "streamlit", "python", "code", "coding", "programming",
+        "how to", "step-by-step", "guide", "curso", "class", "app", "software",
+        "developer", "dev", "api", "cloud", "javascript", "react", "setup"
     ]
-    texto_evaluar = (texto_user + " " + url).lower()
-    if any(p in texto_evaluar for p in palabras_podcast):
-        return {"es_conversacional": True, "razon": "Patrón conversacional / podcast detectado."}
+    
+    texto_evaluar = (texto_user + " " + url + " " + titulo_contenido).lower()
+    if any(p in texto_evaluar for p in palabras_no_musicales):
+        return {"es_conversacional": True, "razon": "Contenido no musical (Tutorial / Conversacional / Técnico) detectado."}
 
     return {"es_conversacional": False}
 
@@ -183,7 +188,8 @@ def analizar_pista(query):
     url_detectada = match.group(0)
     cancion_nombre = obtener_titulo_desde_link(url_detectada)
     
-    chequeo_30s = inspeccionar_audio_30s(url_detectada, query)
+    # Inspección estricta incluyendo el título obtenido del enlace
+    chequeo_30s = inspeccionar_audio_30s(url_detectada, query, cancion_nombre)
     if chequeo_30s["es_conversacional"]:
         return {
             "es_musica": False, 
@@ -368,9 +374,9 @@ with tab_chat:
                 else:
                     nom_detectado = analisis.get("titulo_detectado", "Contenido detectado")
                     reply = (
-                        f"🎙️ **Audio Conversacional Detectado:**\n\n"
-                        f"El enlace *'{nom_detectado}'* fue analizado en sus primeros 30 segundos y **not corresponde a una pieza musical bailable**.\n\n"
-                        f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita*) ni métricas a podcasts, charlas o entrevistas."
+                        f"🎙️ **Contenido No Musical Detectado:**\n\n"
+                        f"El enlace *'{nom_detectado}'* fue analizado y corresponde a un tutorial, charla o video sin audio musical bailable.\n\n"
+                        f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita*) ni métricas a tutoriales técnicos o contenido conversacional."
                     )
                 
                 st.session_state.messages.append({"role": "assistant", "content": reply})
