@@ -5,8 +5,6 @@ scikit-learn
 joblib
 requests
 beautifulsoup4
-librosa 
+librosa
 yt-dlp
-re
-os
-tempfile
+reportlab
