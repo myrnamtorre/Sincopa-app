@@ -59,7 +59,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "👋 **¡Hola! Soy Síncopa, tu asistente de análisis coreográfico y métrica musical.**\n\nIngresa el **enlace (link) de una canción** (Spotify, YouTube, SoundCloud o Apple Music) y analizaré su tempo, género, métrica y exigencia física."
+            "content": "👋 **¡Hola! Soy Síncopa, tu asistente de análisis coreográfico y métrica musical.**\n\nPuedes **ingresar el enlace de una canción** para analizarla o pedirme **listas de canciones, tips y recomendaciones** de Salsa, Bachata, Quebradita o Timba."
         }
     ]
 
@@ -117,14 +117,10 @@ def analizar_pista(url):
     if not nombre_visual:
         nombre_visual = "Pista / Enlace de Audio"
 
-    # -------------------------------------------------------------------------
-    # EVALUACIÓN ESPECTRAL (Segmento de 0 a 30 segundos)
-    # -------------------------------------------------------------------------
     speechiness_30s = round(random.uniform(0.02, 0.85), 2)
     danceability_30s = round(random.uniform(0.20, 0.95), 2)
     tempo_30s = random.randint(100, 195)
 
-    # GUARDRAIL TÉCNICO (Sin lectura de palabras):
     if speechiness_30s > 0.35 or danceability_30s < 0.40:
         return {
             "es_musica": False,
@@ -156,10 +152,10 @@ def obtener_metricas_multi_modalidad(genero, tempo):
         pareja, grupo, solista = 10, 9, 8
         metrica = "📌 **Métrica:** Compás de 2/4 acelerado. Acentuación fuerte y continua en el bote/brinco.\n📌 **Estructura:** Secciones dinámicas con giros continuos y acrobacias."
         ejercicios = "• Potencia pliométrica (saltos verticales y absorción de impacto).\n• Estabilidad de core para alzadas y cargadas."
-    else:  # Salsa
+    else:  # Salsa / Timba
         pareja, grupo, solista = 9, 8, 9
-        metrica = "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos marcados en campana y tumbao.\n📌 **Estructura:** Intro, verso, montuno, mambo y descarga."
-        ejercicios = "• Agilidad de pies (shines/footwork) y reacción rápida.\n• Control del marco postural en pareja."
+        metrica = "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos marcados en campana, tumbao y bloques de metales.\n📌 **Estructura:** Intro, verso, montuno, mambo, marcha y despelote."
+        ejercicios = "• Agilidad de pies (shines/footwork) y reacción rápida.\n• Control del marco postural e independencia corporal."
 
     return {
         "pareja": pareja,
@@ -168,6 +164,103 @@ def obtener_metricas_multi_modalidad(genero, tempo):
         "metrica_ritmo": metrica,
         "ejercicios_recomendados": ejercicios
     }
+
+# ==========================================
+# CATÁLOGOS DINÁMICOS Y RESPUESTAS FLEXIBLES
+# ==========================================
+CATALOGO_DINAMICO = {
+    "quebradita": [
+        "La Chona - Los Tucanes de Tijuana (~180 BPM)",
+        "La Quebradora - Banda El Mexicano (~175 BPM)",
+        "El Tucanazo - Los Tucanes de Tijuana (~182 BPM)",
+        "La Culebra - Banda Machos (~178 BPM)",
+        "Eva María - Banda Maguey (~172 BPM)",
+        "Al Gato y al Ratón - Banda Machos (~185 BPM)",
+        "El Baile del Perrito - Wilfrido Vargas / Adaptación (~170 BPM)",
+        "No Bailes de Caballito - Mi Banda El Mexicano (~176 BPM)"
+    ],
+    "bachata": [
+        "Obsesión - Aventura (~125 BPM)",
+        "Propuesta Indecente - Romeo Santos (~122 BPM)",
+        "Stand by Me - Prince Royce (~118 BPM)",
+        "Dile al Amor - Aventura (~126 BPM)",
+        "Deja Vu - Shakira & Prince Royce (~120 BPM)",
+        "Eres Mía - Romeo Santos (~124 BPM)",
+        "Darte un Beso - Prince Royce (~121 BPM)",
+        "El Perdedor - Aventura (~123 BPM)"
+    ],
+    "salsa": [
+        "Llorarás - Oscar D'León (~160 BPM)",
+        "Valió la Pena - Marc Anthony (~148 BPM)",
+        "Rebelión - Joe Arroyo (~155 BPM)",
+        "Periódico de Ayer - Héctor Lavoe (~145 BPM)",
+        "A Guanacaste - Ray Barretto (~162 BPM)",
+        "La Rebelión - Sonora Carruseles (~165 BPM)",
+        "Aguanilé - Willie Colón & Héctor Lavoe (~152 BPM)",
+        "Sin Salsa No Hay Paraíso - El Gran Combo (~150 BPM)"
+    ],
+    "timba": [
+        "Me Dicen Cuba - Alexander Abreu & Havana D'Primera (~102 BPM / Clave Timba)",
+        "La Parada - Los Van Van (~105 BPM)",
+        "El Acorazado Tinajón - Maykel Blanco y su Salsa Mayor (~108 BPM)",
+        "Se Acabó el Querer - Manolito Simonet y su Trabuco (~104 BPM)",
+        "De Qué Estamos Hablando - Charanga Habanera (~106 BPM)",
+        "Pasaporte - Havana D'Primera (~103 BPM)",
+        "Tremendo Tembo - Alain Pérez (~107 BPM)",
+        "El Cachumbambé - Bamboleo (~105 BPM)"
+    ]
+}
+
+def responder_consulta_texto(prompt):
+    """Atiende cualquier consulta de texto con coincidencia flexible de palabras clave."""
+    p = prompt.lower()
+    
+    # Detectores por expresiones regulares
+    pide_quebradita = bool(re.search(r'\b(quebradi|quebradora|banda|chona)\b', p))
+    pide_bachata = bool(re.search(r'\b(bachat|sensual|dominican)\b', p))
+    pide_salsa = bool(re.search(r'\b(sals|mambo|guaguanc|dura)\b', p))
+    pide_timba = bool(re.search(r'\b(timb|cuban|casin|van van|habana)\b', p))
+    pide_vestuario = bool(re.search(r'\b(vestuar|ropa|outfit|ponerm|calzado|zapato|zapatillas|ponerme|vestir)\b', p))
+
+    # 1. RECOMENDACIONES DE VESTUARIO
+    if pide_vestuario:
+        if pide_quebradita:
+            return "🤠 **Vestuario para Quebradita:** Botas vaqueras ligeras con buen agarre y amortiguación en el talón, cinto piteado/vaquero firme y pantalón o vestido elastizado que permita giros veloces y alzadas."
+        elif pide_bachata:
+            return "🇩🇴 **Vestuario para Bachata:** Calzado flexible con suela de ante/cuero (para giros suaves), vestuario que resalte el movimiento pélvico/cadera y telas suaves con buena caída."
+        elif pide_timba or pide_salsa:
+            return "🇨🇺🎺 **Vestuario para Salsa / Timba:** Zapatos de baile con soporte firme en el tobillo, vestuario cómodo, ligero y transpirable para resistir el esfuerzo cardiovascular y los cambios bruscos de dirección."
+        else:
+            return """👗 **Guía General de Vestuario de Baile:**
+
+* **Bachata:** Calzado de ante flexible, prendas que faciliten la disociación corporal y soltura en caderas.
+* **Salsa & Timba:** Zapatos con soporte de tobillo, telas ligeras/transpirables y soltura para footwork rápido.
+* **Quebradita:** Botas ligeras con amortiguación, ropa resistente para cargadas y cinto ajustado."""
+
+    # 2. SUGERENCIAS Y LISTAS DINÁMICAS DE CANCIONES
+    elif pide_quebradita:
+        muestra = random.sample(CATALOGO_DINAMICO["quebradita"], 5)
+        lista_fmt = "\n".join([f"{i+1}. {c}" for i, c in enumerate(muestra)])
+        return f"🤠 **Sugerencias dinámicas de Quebradita para ensayo/montaje:**\n\n{lista_fmt}\n\n💡 *Tip de ensayo:* Enfócate en la absorción del bote con las rodillas flexibilizadas."
+
+    elif pide_bachata:
+        muestra = random.sample(CATALOGO_DINAMICO["bachata"], 5)
+        lista_fmt = "\n".join([f"{i+1}. {c}" for i, c in enumerate(muestra)])
+        return f"🇩🇴 **Sugerencias dinámicas de Bachata para ensayo/montaje:**\n\n{lista_fmt}\n\n💡 *Tip de ensayo:* Presta atención a la acentuación del tiempo 4 y 8."
+
+    elif pide_timba:
+        muestra = random.sample(CATALOGO_DINAMICO["timba"], 5)
+        lista_fmt = "\n".join([f"{i+1}. {c}" for i, c in enumerate(muestra)])
+        return f"🇨🇺 **Sugerencias dinámicas de Timba Cubana para ensayo/montaje:**\n\n{lista_fmt}\n\n💡 *Tip de ensayo:* Siente los cortes del piano (tumbaos) y las marchas para el despelote."
+
+    elif pide_salsa:
+        muestra = random.sample(CATALOGO_DINAMICO["salsa"], 5)
+        lista_fmt = "\n".join([f"{i+1}. {c}" for i, c in enumerate(muestra)])
+        return f"🎺 **Sugerencias dinámicas de Salsa para ensayo/montaje:**\n\n{lista_fmt}\n\n💡 *Tip de ensayo:* Identifica la marcación de la clave antes de arrancar la estructura del montaje."
+
+    # RESPUESTA DE RESPALDO SI NO IDENTIFICA EL TEMA ESPECÍFICO
+    else:
+        return "💡 Si deseas analizar una pista, **ingresa su enlace de Spotify, YouTube, SoundCloud o Apple Music**. También puedes pedirme canciones o vestuario sobre **Salsa, Bachata, Quebradita o Timba**."
 
 # ==========================================
 # 4. INTERFAZ STREAMLIT
@@ -215,47 +308,37 @@ with tabs[2]:
     **Síncopa** es un asistente especializado para bailarines, maestros y coreógrafos.
 
     ### 📌 ¿Cómo funciona?
-    1. **Pega la URL:** Ingresa un enlace válido de YouTube, Spotify, SoundCloud o Apple Music.
-    2. **Inspección de 30 Segundos:** Síncopa analiza las métricas de la señal de audio en los primeros 30s sin evaluar títulos ni nombres de texto.
-    3. **Guardrail Conversacional:** Si el audio es una plática, podcast o tutorial, la app frena la clasificación y permanece en silencio.
-    4. **Generación Coreográfica:** Para audios musicales, predice el ritmo (**Bachata, Salsa o Quebradita**) y ofrece la estructura métrica, exigencia física y ficha técnica descargable.
+    1. **Analizar Canción:** Pega un enlace válido de Spotify, YouTube, SoundCloud o Apple Music.
+    2. **Consultar Recomendaciones:** Pide directamente por texto listas dinámicas de canciones, vestuario o tips para Salsa, Bachata, Quebradita y Timba.
+    3. **Guardrail Conversacional:** Si ingresas un video/podcast de charla, Síncopa se mantiene en silencio y no asigna género.
     """)
 
 # ==========================================
-# 5. INPUT DEL CHAT (Anclado al final de la pantalla)
+# 5. INPUT DEL CHAT (Anclado al final)
 # ==========================================
-if prompt := st.chat_input("Pega aquí el enlace de la canción (Spotify, YouTube, SoundCloud...)..."):
+if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta (ej. 'recomiéndame rolas de timba')..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Renderizar el mensaje ingresado en la pestaña del chat
     with tabs[0]:
         with st.chat_message("user"):
             st.markdown(prompt)
 
         prompt_low = prompt.strip().lower()
 
-        if prompt_low in ["hola", "buenas", "que haces?", "quien eres?", "ayuda"]:
-            reply = "¡Hola! Para comenzar, **por favor ingresa el enlace (link) de la canción** que deseas analizar."
-            with st.chat_message("assistant"):
-                st.markdown(reply)
-            st.session_state.messages.append({"role": "assistant", "content": reply})
-
-        else:
+        # CASO 1: Es una URL -> Ejecuta inspección de audio
+        if es_url_valida(prompt):
             with st.chat_message("assistant"):
                 with st.spinner("🎧 Inspeccionando señal espectral de los primeros 30 segundos..."):
                     time.sleep(0.3)
                     analisis = analizar_pista(prompt)
 
                 if not analisis["es_musica"]:
-                    if analisis.get("razon") == "requiere_link":
-                        reply = "⚠️ **Por favor, ingresa únicamente un enlace (link) válido** de *Spotify, YouTube, SoundCloud o Apple Music*. No realizo análisis ingresando el texto escrito."
-                    else:
-                        nom_detectado = analisis.get("titulo_detectado", "Audio analizado")
-                        reply = (
-                            f"🎙️ **Contenido No Musical Detectado:**\n\n"
-                            f"Se inspeccionaron los primeros 30 segundos de la señal de *'{nom_detectado}'* y no se detectó una estructura rítmica bailable (alta presencia de voz hablada / conversación).\n\n"
-                            f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita*) ni métricas a pláticas, podcasts o tutoriales."
-                        )
+                    nom_detectado = analisis.get("titulo_detectado", "Audio analizado")
+                    reply = (
+                        f"🎙️ **Contenido No Musical Detectado:**\n\n"
+                        f"Se inspeccionaron los primeros 30 segundos de la señal de *'{nom_detectado}'* y no se detectó una estructura rítmica bailable (alta presencia de voz hablada / conversación).\n\n"
+                        f"> ⛔ **Síncopa permanece en silencio:** No se asigna género (*Salsa/Bachata/Quebradita/Timba*) ni métricas a pláticas, podcasts o tutoriales."
+                    )
                     st.warning(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
 
@@ -350,3 +433,10 @@ PREPARACIÓN FÍSICA SUGERIDA:
                         mime="text/plain"
                     )
                     st.session_state.messages.append({"role": "assistant", "content": reply})
+
+        # CASO 2: Consulta de texto (Listas dinámicas, vestuario o sugerencias)
+        else:
+            with st.chat_message("assistant"):
+                reply = responder_consulta_texto(prompt)
+                st.markdown(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
