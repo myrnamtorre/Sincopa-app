@@ -82,7 +82,7 @@ if "messages" not in st.session_state:
                 "--- \n"
                 "### 🛑 Límites del servicio:\n"
                 "* ⚠️ **Importante:** Para analizar canciones específicas, **ingresa únicamente enlaces/links de audio o video**. Los nombres en texto plano no serán procesados.\n"
-                "* ⚠️ *No se procesan archivos locales subidos en formato audio (.mp3/.wav).* Por favor comparte el enlace.\n"
+                "* ⚠️ *Contenido no musical (Podcasts, Entrevistas, Vlogs, Charlas)* será detectado y rechazado automáticamente.\n"
                 "* ⚠️ *Especializado exclusivamente en género tropical y latino:* **Bachata, Salsa y Quebradita**.\n"
                 "* ⚠️ *Las métricas y tempos (BPM) son estimaciones algorítmicas de orientación pedagógica y entrenamiento.*"
             )
@@ -97,7 +97,7 @@ if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
 # ==========================================
-# 5. FUNCIONES DE EXTRACCIÓN Y VALIDACIÓN
+# 5. FUNCIONES DE EXTRACCIÓN Y VALIDACIÓN BLINDADA
 # ==========================================
 def obtener_titulo_desde_link(url):
     if "youtube.com" in url or "youtu.be" in url:
@@ -132,17 +132,10 @@ def obtener_titulo_desde_link(url):
     except Exception:
         pass
     
-    return "Canción por Enlace Externo"
+    return "Enlace Externo"
 
 def analizar_pista(query):
-    q = query.lower().strip()
-    
-    # 1. CANDADO: Detección de Podcasts / Voz Hablada
-    tokens_no_musica = ["podcast", "entrevista", "interview", "vlog", "hablado", "conferencia", "noticias", "discurso", "talk show"]
-    if any(t in q for t in tokens_no_musica):
-        return {"es_musica": False, "razon": "podcast"}
-
-    # 2. CANDADO: Verificación de Enlace
+    # 1. CANDADO DE ENLACE: Verificar que exista un link explícito
     match = re.search(r'https?://[^\s]+', query)
     if not match:
         return {"es_musica": False, "razon": "requiere_link"}
@@ -150,10 +143,19 @@ def analizar_pista(query):
     url_detectada = match.group(0)
     cancion_nombre = obtener_titulo_desde_link(url_detectada)
     
-    # Simulación de extracción de métricas físicas de audio basadas en hash
-    hash_val = int(hashlib.md5(url_detectada.encode('utf-8')).hexdigest(), 16)
+    # 2. CANDADO DE PODCAST / VOZ HABLADA (Filtro por palabras en prompt y en título web)
+    texto_a_evaluar = f"{query} {cancion_nombre}".lower()
+    tokens_no_musica = [
+        "podcast", "entrevista", "interview", "vlog", "hablado", 
+        "conferencia", "noticias", "discurso", "talk show", "ep.", 
+        "episodio", "episode", "conversatorio", "panel", "audiobook", "audiolibro"
+    ]
     
-    # La estimación de tempo se realiza objetivamente
+    if any(t in texto_a_evaluar for t in tokens_no_musica):
+        return {"es_musica": False, "razon": "podcast", "titulo_detectado": cancion_nombre}
+
+    # Simulación de extracción de métricas físicas de audio basadas en hash del link
+    hash_val = int(hashlib.md5(url_detectada.encode('utf-8')).hexdigest(), 16)
     tempo_calculado = 100.0 + (hash_val % 145) # Rango 100 - 245 BPM
     secciones_calc = 6 + (hash_val % 7)
 
@@ -305,7 +307,7 @@ with tab_chat:
                 st.markdown(reply)
 
         # CASO 2: Solicitud de Sugerencias / Listas
-        elif any(w in p_lower for w in ["sugerencia", "sugerencias", "sugieres", "sugiere", "recomienda", "opciones", "lista", "listas", "bachata", "bachatas", "salsa", "salsas", "quebradita", "quebraditas"]):
+        elif any(w in p_lower for w in ["sugerencia", "sugerencias", "sugieres", "sugiere", "recomienda", "opciones", "lista", "listas", "bachata", "bachatas", "salsa", "salsas", "quebradita", "quebraditas"]) and not re.search(r'https?://[^\s]+', prompt):
             partes = re.split(r',| y | e ', p_lower)
             bloques_respuesta = []
             for parte in partes:
@@ -325,7 +327,7 @@ with tab_chat:
             with st.chat_message("assistant"):
                 st.markdown(reply)
 
-        # CASO 3: Análisis de pista (Aplica los candados estrictos)
+        # CASO 3: Análisis de pista (Filtro estricto para podcasts y contenido no musical)
         else:
             with st.chat_message("assistant"):
                 with st.spinner("🤖 Validando enlace y analizando métricas de audio..."):
@@ -336,7 +338,8 @@ with tab_chat:
                 if analisis.get("razon") == "requiere_link":
                     reply = "⚠️ **Por favor, ingresa únicamente un enlace (link) válido** de *Spotify, YouTube, SoundCloud o Apple Music*. No realizo análisis ingresando el nombre escrito de la canción."
                 else:
-                    reply = "🎙️ **Contenido No Musical Detectado:** El enlace ingresado parece ser un podcast o voz hablada. Síncopa solo analiza pistas musicales de Salsa, Bachata y Quebradita."
+                    nom_detectado = analisis.get("titulo_detectado", "Contenido detectado")
+                    reply = f"🎙️ **Contenido No Musical Detectado:** El enlace (*'{nom_detectado}'*) parece ser un podcast, entrevista o voz hablada. Síncopa únicamente analiza temas musicales para danza (**Salsa, Bachata y Quebradita**)."
                 
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 with st.chat_message("assistant"):
@@ -350,7 +353,6 @@ with tab_chat:
                     df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
                     prediccion_ml = modelo.predict(df_in)[0]
                 else:
-                    # Evaluación según rangos métricos de tempo
                     if tempo_val > 210:
                         prediccion_ml = "Quebradita"
                     elif tempo_val < 135:
