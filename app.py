@@ -65,7 +65,7 @@ if "messages" not in st.session_state:
                 "Para aprovechar al máximo nuestra conversación, ten en cuenta lo que puedo hacer por ti:\n\n"
                 "### 🎯 ¿Qué puedes pedirme?:\n"
                 "1. **Análisis de Canción o Link:** Ingresa el título o pega un enlace de *Spotify, YouTube, SoundCloud o Apple Music* para clasificar su género (**Bachata, Salsa o Quebradita**) y calcular su tempo estimado (BPM).\n"
-                "2. **Exigencia Física & Modalidad:** Descubre el nivel de exigencia física (1 a 10) si la rutina se baila en **Pareja, Grupo/Compañía o Solista**.\n"
+                "2. **Exigencia Física & Modalidad:** Descubre el nivel de exigencia física (1 a 10) según el tempo de la pista en **Pareja, Grupo/Compañía o Solista**.\n"
                 "3. **Acondicionamiento Físico:** Pídeme rutinas de ejercicio específicas (pliometría, disociación, agilidad) para aguantar el ritmo de la pista.\n"
                 "4. **Recomendaciones de Vestuario y Calzado:** Pregúntame qué ropa o calzado es el ideal para el género analizado.\n"
                 "5. **Sugerencias Dinámicas de Canciones:** Pídeme listas personalizadas (ej. *'bachatas lentas, salsas rápidas y quebraditas para principiantes'*).\n\n"
@@ -87,7 +87,7 @@ if "historial_evaluaciones" not in st.session_state:
 
 # 4. FUNCIONES DE EXTRACCIÓN Y ANÁLISIS
 def obtener_titulo_desde_link(url):
-    # 1. Si es de YouTube, usamos el endpoint oEmbed oficial (rápido, gratis y sin bloqueos de servidor)
+    # 1. Endpoint oEmbed de YouTube (Rápido, oficial y no bloqueable por servidores cloud)
     if "youtube.com" in url or "youtu.be" in url:
         try:
             oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
@@ -98,7 +98,7 @@ def obtener_titulo_desde_link(url):
         except Exception:
             pass
 
-    # 2. Para otros enlaces (Spotify, SoundCloud, Apple Music), scraping con User-Agent
+    # 2. Para otros enlaces (Spotify, SoundCloud, Apple Music)
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
@@ -144,23 +144,23 @@ def analizar_pista(query):
 
     hash_val = int(hashlib.md5(q.encode('utf-8')).hexdigest(), 16)
 
-    tokens_quebradita = ["quebradita", "quebraditas", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", "tucanes", "vampiro"]
-    tokens_bachata = ["bachata", "bachatas", "sensual", "bolero", "slow", "suave", "romantica", "romeo", "aventura", "prince", "royce", "guerra"]
-    tokens_salsa = ["salsa", "salsas", "mambo", "guaguanco", "son", "timba", "marc anthony", "lavoe", "colon", "arroyo"]
+    tokens_quebradita = ["quebradita", "quebraditas", "banda", "zapateado", "brinco", "fast", "roncona", "culebra", "caballito", "vaquero", "machos", "arkangel", "tucanes", "vampiro", "chona", "maguey", "cuisillos"]
+    tokens_bachata = ["bachata", "bachatas", "sensual", "bolero", "slow", "suave", "romantica", "romeo", "aventura", "prince", "royce", "guerra", "monchy", "alexandra", "propuesta", "darte", "obsesion"]
+    tokens_salsa = ["salsa", "salsas", "mambo", "guaguanco", "son", "timba", "marc anthony", "lavoe", "colon", "arroyo", "niche", "roena", "santiago", "rebelion", "aguanile"]
 
     cadena_eval = (query + " " + cancion_nombre).lower()
 
     if any(w in cadena_eval for w in tokens_quebradita):
-        tempo_base = 240.0 + (hash_val % 15)
+        tempo_base = 220.0 + (hash_val % 35)
         secciones_base = 12
     elif any(w in cadena_eval for w in tokens_bachata):
-        tempo_base = 122.0 + (hash_val % 12)
+        tempo_base = 105.0 + (hash_val % 35)
         secciones_base = 7
     elif any(w in cadena_eval for w in tokens_salsa):
-        tempo_base = 178.0 + (hash_val % 20)
+        tempo_base = 160.0 + (hash_val % 45)
         secciones_base = 9
     else:
-        tempo_base = 135.0 + (hash_val % 50)
+        tempo_base = 120.0 + (hash_val % 70)
         secciones_base = 8
 
     return {
@@ -171,9 +171,19 @@ def analizar_pista(query):
         "cancion_formateada": cancion_nombre
     }
 
-def obtener_metricas_multi_modalidad(genero_predicho):
+def obtener_metricas_multi_modalidad(genero_predicho, tempo):
+    """Calcula la exigencia física dinámicamente según los BPM reales de la canción."""
+    
+    # Factor de escala según el tempo (BPM)
+    if tempo < 130:
+        factor_bpm = 4.5 + (tempo - 90) * 0.05
+    elif tempo < 180:
+        factor_bpm = 6.5 + (tempo - 130) * 0.04
+    else:
+        factor_bpm = 8.5 + (tempo - 180) * 0.025
+
     if genero_predicho == "Quebradita":
-        base = 8.5
+        base = factor_bpm + 1.2
         recom = "⭐ **Sugerencia:** ¡Ideal para **Grupo / Compañía** por el impacto visual de los lanzamientos y bloques sincronizados!"
         ejercicios = (
             "* 🦘 **Pliometría & Potencia:** Jump squats y salto de cuerda rápido (3 series x 45 seg).\n"
@@ -181,8 +191,9 @@ def obtener_metricas_multi_modalidad(genero_predicho):
             "* 🫁 **Resistencia Cardiovascular HIIT:** Intervalos de 30s esfuerzo / 15s descanso."
         )
         metrica_ritmo = "⏱️ **Estructura Métrica:** Compás 2/4 rápido.\n👉 **Acentuación:** Marcación rápida constante. ¡Sincroniza los saltos e impulsos en los tiempos fuertes **1 y 2**!"
+
     elif genero_predicho == "Salsa":
-        base = 7.0
+        base = factor_bpm
         recom = "⭐ **Sugerencia:** Funciona excelente tanto en **Pareja** (turn patterns) como en **Solista** para lucir Shines/Footwork."
         ejercicios = (
             "* ⚡ **Agilidad de Pies (Footwork):** Escalera de agilidad para rapidez en shines.\n"
@@ -190,8 +201,9 @@ def obtener_metricas_multi_modalidad(genero_predicho):
             "* 🦵 **Movilidad de Cadera:** Disociación pélvica y fortalecimiento de abductores."
         )
         metrica_ritmo = "⏱️ **Estructura Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2).\n👉 **Acentuación:** Paso básico en **1, 2, 3** (pausa en 4) y **5, 6, 7** (pausa en 8). Opciones de acento On1 u On2 según el arreglo."
+
     else: # Bachata
-        base = 5.0
+        base = factor_bpm - 0.8
         recom = "⭐ **Sugerencia:** Perfecta para **Pareja** por la conexión y fluidez en ondas/sensual, o **Solista** para disociación."
         ejercicios = (
             "* 🌊 **Disociación Corporal:** Aislación torácica y ondas de torso.\n"
@@ -200,17 +212,22 @@ def obtener_metricas_multi_modalidad(genero_predicho):
         )
         metrica_ritmo = "⏱️ **Estructura Métrica:** Compás 4/4 (Fraseo de 8 tiempos).\n👉 **Acentuación:** Pasos en **1, 2, 3** con **Tap / Golpe de Cadera** en el tiempo **4** (y **5, 6, 7** con Tap en **8**)."
 
+    # Cálculo dinámico final delimitado de 1.0 a 10.0
+    p_pareja = round(min(10.0, max(1.0, base)), 1)
+    p_grupo = round(min(10.0, max(1.0, base + 1.2)), 1)
+    p_solista = round(min(10.0, max(1.0, base + 0.8)), 1)
+
     return {
-        "pareja": round(base, 1),
-        "grupo": round(min(10.0, base + 1.5), 1),
-        "solista": round(min(10.0, base + 1.0), 1),
+        "pareja": p_pareja,
+        "grupo": p_grupo,
+        "solista": p_solista,
         "recomendacion_estilo": recom,
         "ejercicios_recomendados": ejercicios,
         "metrica_ritmo": metrica_ritmo
     }
 
 def generar_sugerencias_dinamicas(genero, filtro, cantidad=3):
-    """Genera combinaciones variadas e impredecibles en cada consulta."""
+    """Genera combinaciones de canciones impredecibles en cada llamada."""
     gen_data = ARTISTAS_Y_ESTILOS.get(genero, ARTISTAS_Y_ESTILOS["Bachata"])
     artistas = gen_data["artistas"]
     
@@ -291,7 +308,8 @@ with tab_chat:
             eval_previa = st.session_state.ultima_evaluacion
             gen_previo = eval_previa["genero"]
             cancion_previa = eval_previa["cancion"]
-            mm_prev = obtener_metricas_multi_modalidad(gen_previo)
+            tempo_previo = eval_previa["tempo"]
+            mm_prev = obtener_metricas_multi_modalidad(gen_previo, tempo_previo)
 
             if es_pregunta_vestuario:
                 if gen_previo == "Quebradita":
@@ -356,9 +374,10 @@ with tab_chat:
                     df_in = pd.DataFrame({'tempo': [tempo_val], 'num_secciones': [secciones_val]})
                     prediccion_ml = modelo.predict(df_in)[0]
                 else:
-                    prediccion_ml = "Quebradita" if tempo_val > 220 else ("Bachata" if tempo_val < 140 else "Salsa")
+                    prediccion_ml = "Quebradita" if tempo_val > 210 else ("Bachata" if tempo_val < 135 else "Salsa")
 
-                mm = obtener_metricas_multi_modalidad(prediccion_ml)
+                # Pasa el tempo_val para calcular exigencia dinámica real
+                mm = obtener_metricas_multi_modalidad(prediccion_ml, tempo_val)
 
                 registro_sesion = {
                     "Pista / Canción": analisis['cancion_formateada'],
