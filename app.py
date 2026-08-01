@@ -124,33 +124,30 @@ def obtener_titulo_desde_link(url):
     return "Enlace Externo"
 
 def inspeccionar_audio_30s(url, texto_user):
-    hash_val = int(hashlib.md5(url.encode('utf-8')).hexdigest(), 16)
-    
+    """
+    Detección estricta por semántica para evitar falsos positivos con temas musicales.
+    """
     palabras_podcast = [
         "podcast", "episodio", "episode", "entrevista", "interview", "vlog",
         "hablando", "charlando", "conversación", "talk", "dialogo", "discurso",
         "conferencia", "capítulo", "capitulo", "host", "stream", "hablado"
     ]
-    if any(p in texto_user.lower() for p in palabras_podcast):
+    texto_evaluar = (texto_user + " " + url).lower()
+    if any(p in texto_evaluar for p in palabras_podcast):
         return {"es_conversacional": True, "razon": "Patrón conversacional / podcast detectado."}
-
-    speechiness_sim = ((hash_val >> 12) % 100) / 100.0
-    if speechiness_sim > 0.65:
-        return {"es_conversacional": True, "razon": "Señal continua de voz hablada sin patrón rítmico bailable."}
 
     return {"es_conversacional": False}
 
 def extraer_features_completas(url_detectada):
     """
-    Genera el vector de 8 características ajustado exactamente al nuevo modelo entrenado.
+    Genera el vector de 8 características numéricas/espectrales para el modelo ML.
     """
     hash_val = int(hashlib.md5(url_detectada.encode('utf-8')).hexdigest(), 16)
 
     # Simulación de extracción de métricas espectrales/audio
-    tempo_base = 110.0 + (hash_val % 80)  # 110 a 190
+    tempo_base = 110.0 + (hash_val % 80)
     densidad_percusiva = ((hash_val >> 3) % 100) / 100.0
 
-    # Ajuste de octava si la densidad percusiva es alta (típico de quebradita en 2/4)
     if densidad_percusiva > 0.40 and tempo_base < 130:
         tempo_calc = tempo_base * 2.0
     else:
@@ -158,12 +155,12 @@ def extraer_features_completas(url_detectada):
 
     return {
         "tempo": round(float(tempo_calc), 1),
-        "danceability": round(float(((hash_val >> 2) % 40 + 55) / 100.0), 2),  # 0.55 - 0.95
-        "energy": round(float(((hash_val >> 4) % 45 + 50) / 100.0), 2),        # 0.50 - 0.95
-        "valence": round(float(((hash_val >> 6) % 50 + 40) / 100.0), 2),       # 0.40 - 0.90
-        "speechiness": round(float(((hash_val >> 8) % 20 + 3) / 100.0), 2),    # 0.03 - 0.23
-        "acousticness": round(float(((hash_val >> 10) % 50 + 5) / 100.0), 2),  # 0.05 - 0.55
-        "densidad_tatum": round(float(((hash_val >> 14) % 30 + 10) / 10.0), 1), # 1.0 - 4.0
+        "danceability": round(float(((hash_val >> 2) % 40 + 55) / 100.0), 2),
+        "energy": round(float(((hash_val >> 4) % 45 + 50) / 100.0), 2),
+        "valence": round(float(((hash_val >> 6) % 50 + 40) / 100.0), 2),
+        "speechiness": round(float(((hash_val >> 8) % 15 + 3) / 100.0), 2),
+        "acousticness": round(float(((hash_val >> 10) % 50 + 5) / 100.0), 2),
+        "densidad_tatum": round(float(((hash_val >> 14) % 30 + 10) / 10.0), 1),
         "num_secciones": int(6 + (hash_val % 6))
     }
 
@@ -175,7 +172,7 @@ def analizar_pista(query):
     url_detectada = match.group(0)
     cancion_nombre = obtener_titulo_desde_link(url_detectada)
     
-    # 1. Inspección 30s
+    # 1. Inspección de señal/contexto
     chequeo_30s = inspeccionar_audio_30s(url_detectada, query)
     if chequeo_30s["es_conversacional"]:
         return {
@@ -372,9 +369,8 @@ with tab_chat:
                     st.warning(reply)
             else:
                 tempo_val = analisis["tempo"]
-                secciones_val = analisis["num_secciones"]
 
-                # CONSTRUCCIÓN DEL DATAFRAME CON LAS 8 FEATURES DEL NUEVO MODELO
+                # CONSTRUCCIÓN DEL DATAFRAME CON LAS 8 FEATURES DEL MODELO
                 df_in = pd.DataFrame([{
                     'tempo': analisis['tempo'],
                     'danceability': analisis['danceability'],
@@ -390,18 +386,17 @@ with tab_chat:
                 if modelo is not None:
                     try:
                         prediccion_ml = modelo.predict(df_in)[0]
-                    except Exception as e:
-                        # Fallback por si la versión del modelo tuviera discrepancia
-                        if tempo_val >= 180 or analisis['energy'] > 0.85:
+                    except Exception:
+                        if tempo_val >= 175 or analisis['energy'] > 0.85:
                             prediccion_ml = "Quebradita"
-                        elif tempo_val >= 140:
+                        elif tempo_val >= 135:
                             prediccion_ml = "Salsa"
                         else:
                             prediccion_ml = "Bachata"
                 else:
-                    if tempo_val >= 180 or analisis['energy'] > 0.85:
+                    if tempo_val >= 175 or analisis['energy'] > 0.85:
                         prediccion_ml = "Quebradita"
-                    elif tempo_val >= 140:
+                    elif tempo_val >= 135:
                         prediccion_ml = "Salsa"
                     else:
                         prediccion_ml = "Bachata"
