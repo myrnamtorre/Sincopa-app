@@ -7,3 +7,6 @@ requests
 beautifulsoup4
 librosa 
 yt-dlp
+re
+os
+tempfile
