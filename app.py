@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
-import re
 import random
 import time
 import requests
@@ -36,15 +35,6 @@ st.markdown("""
     .stChatMessage {
         border-radius: 12px;
     }
-    .tech-legend {
-        background-color: #F0F4F8;
-        border-left: 4px solid #457B9D;
-        padding: 10px 15px;
-        border-radius: 6px;
-        font-size: 0.88rem;
-        color: #1D3557;
-        margin-top: 10px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -63,14 +53,13 @@ def cargar_modelo():
 
 modelo = cargar_modelo()
 
-# MENSAJE DE PRESENTACIÓN Y GUÍA DE USUARIO EN EL CHATBOT
 MENSAJE_BIENVENIDA = """👋 **¡Hola! Soy Síncopa, tu asistente de análisis coreográfico y métrica musical.**
 
 ### 📚 Guía Rápida de Uso:
 1. 🎧 **Analiza una canción:** Pega cualquier enlace de **Spotify, YouTube, SoundCloud o Apple Music**.
 2. 🔀 **Motor de Clasificación por Audio:** Síncopa no lee nombres ni agrupaciones; analiza la pista mediante parámetros acústicos (*Tempo/BPM, pulsos/beats, densidad percusiva y energía*).
 3. 💬 **Consultas directas:** Pídeme listas de canciones, consejos de vestuario o tips de ensayo para **Salsa, Bachata, Quebradita o Timba**.
-4. 🎙️ **Filtro no musical:** Si ingresas un podcast o video hablado, Síncopa se mantendrá en silencio sin asignar género.
+4. 📥 **Exportación de Datos:** Descarga la **ficha técnica** de cada canción evaluada o la **tabla del historial completo** de tu sesión.
 
 ---
 💡 *Pega un enlace o escribe tu consulta abajo para comenzar.*"""
@@ -86,8 +75,8 @@ if "messages" not in st.session_state:
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
-if "ultima_evaluacion" not in st.session_state:
-    st.session_state.ultima_evaluacion = None
+if "ultimo_genero" not in st.session_state:
+    st.session_state.ultimo_genero = None
 
 # ==========================================
 # 3. EXTRACCIÓN Y INSPECCIÓN DE AUDIO
@@ -184,19 +173,19 @@ def clasificar_genero_por_audio(features):
 def obtener_metricas_multi_modalidad(genero, tempo):
     if genero == "Bachata":
         pareja, grupo, solista = 8, 6, 7
-        metrica = "📌 **Métrica:** Compás de 4/4. Acentuación en el pulso 4 y 8 con tap/golpe de cadera (síncopa suave).\n📌 **Estructura:** Alternancia entre majao, mambo y derecho."
+        metrica = "📌 Métrica: Compás de 4/4. Acentuación en el pulso 4 y 8 con tap/golpe de cadera (síncopa suave).\n📌 Estructura: Alternancia entre majao, mambo y derecho."
         ejercicios = "• Disociación torácica y pélvica.\n• Transferencia fluida de peso y fuerza en tobillos."
     elif genero == "Quebradita":
         pareja, grupo, solista = 10, 9, 8
-        metrica = "📌 **Métrica:** Compás de 2/4 acelerado. Acentuación fuerte y continua en el bote/brinco.\n📌 **Estructura:** Secciones dinámicas con giros continuos y acrobacias."
+        metrica = "📌 Métrica: Compás de 2/4 acelerado. Acentuación fuerte y continua en el bote/brinco.\n📌 Estructura: Secciones dinámicas con giros continuos y acrobacias."
         ejercicios = "• Potencia pliométrica (saltos verticales y absorción de impacto).\n• Estabilidad de core para alzadas y cargadas."
     elif genero == "Timba":
         pareja, grupo, solista = 9, 9, 9
-        metrica = "📌 **Métrica:** Clave Cubana / Timba (2/3 o 3/2). Polirritmia compleja, bloques de metales y tumbaos marcados.\n📌 **Estructura:** Intro, verso, montuno, mambo, marcha, presión y despelote."
+        metrica = "📌 Métrica: Clave Cubana / Timba (2/3 o 3/2). Polirritmia compleja, bloques de metales y tumbaos marcados.\n📌 Estructura: Intro, verso, montuno, mambo, marcha, presión y despelote."
         ejercicios = "• Disociación corporal completa y muelles de rodilla.\n• Resistencia física para cambios bruscos de intensidad."
     else:  # Salsa
         pareja, grupo, solista = 9, 8, 9
-        metrica = "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos marcados en campana y tumbao.\n📌 **Estructura:** Intro, verso, montuno, mambo y cierre."
+        metrica = "📌 Métrica: Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos marcados en campana y tumbao.\n📌 Estructura: Intro, verso, montuno, mambo y cierre."
         ejercicios = "• Agilidad de pies (footwork/shines).\n• Control del marco postural e independencia corporal."
 
     return {
@@ -233,22 +222,48 @@ CATALOGO_DINAMICO = {
 def responder_consulta_texto(prompt):
     p = prompt.lower()
     
-    pide_quebradita = bool(re.search(r'\b(quebradi|quebradora|banda|chona)\b', p))
-    pide_bachata = bool(re.search(r'\b(bachat|sensual|dominican)\b', p))
-    pide_salsa = bool(re.search(r'\b(sals|mambo|guaguanc|dura)\b', p))
-    pide_timba = bool(re.search(r'\b(timb|cuban|casin|van van|habana|timbalive|los 4|el niño)\b', p))
-    pide_vestuario = bool(re.search(r'\b(vestuar|ropa|outfit|ponerm|calzado|zapato|zapatillas|ponerme|vestir)\b', p))
+    pide_quebradita = any(kw in p for kw in ["quebrad", "banda", "chona", "mexicano"])
+    pide_bachata = any(kw in p for kw in ["bachat", "sensual", "dominican", "romeo", "aventura"])
+    pide_salsa = any(kw in p for kw in ["sals", "mambo", "guaguanc", "dura", "oscar", "marc"])
+    pide_timba = any(kw in p for kw in ["timb", "cuban", "casin", "van van", "habana", "timbalive", "niño", "los 4"])
+    pide_vestuario = any(kw in p for kw in ["vestuar", "ropa", "outfit", "ponerm", "calzado", "zapato", "zapatilla", "vestir"])
 
     if pide_vestuario:
-        return "👗 **Guía de Vestuario:** Calzado según la modalidad (ante para giros, botas para quebradita) y ropa que permita flexión."
+        target_genero = st.session_state.ultimo_genero
+
+        if pide_quebradita or target_genero == "Quebradita":
+            return "🤠 **Sugerencia de Vestuario para Quebradita:**\n• Botas vaqueras ligeras con soporte en tobillo y buena amortiguación.\n• Pantalón elastizado o falda con vuelo resistente a alzadas y giros rápidos.\n• Cinto piteado ajustado para apoyo corporal en cargadas."
+        elif pide_bachata or target_genero == "Bachata":
+            return "🇩🇴 **Sugerencia de Vestuario para Bachata:**\n• Calzado flexible de ante/cuero que permita pivotear suavemente el metatarso.\n• Ropa con buena caída que resalte el movimiento fluido de cadera y acentuación en tiempos 4/8."
+        elif pide_timba or target_genero == "Timba":
+            return "🇨🇺 **Sugerencia de Vestuario para Timba Cubana:**\n• Tenis de baile o calzado cómodo con agarre óptimo para muelles de rodilla y despelote.\n• Vestuario fresco, transpirable y holgado que permita disociación de torso y pelvis."
+        elif pide_salsa or target_genero == "Salsa":
+            return "🎺 **Sugerencia de Vestuario para Salsa:**\n• Zapatos de baile con suela de ante y ajuste firme en talón/tobillo.\n• Vestuario ligero con flecos o vuelos para acentuar los giros rápidos y footwork (shines)."
+        else:
+            return """👗 **Guía General de Vestuario de Baile:**
+
+* **Timba / Salsa:** Calzado transpirable con soporte en tobillo y prendas livianas para giros y footwork.
+* **Bachata:** Zapatos flexibles de ante y prendas que acompañen la fluidez de la cadera.
+* **Quebradita:** Botas ligeras con amortiguación y ropa elastizada resistente a alzadas."""
+
+    elif pide_quebradita:
+        muestra = random.sample(CATALOGO_DINAMICO["quebradita"], min(2, len(CATALOGO_DINAMICO["quebradita"])))
+        return f"🤠 **Sugerencias de Quebradita:**\n\n" + "\n".join([f"• {c}" for c in muestra])
+
     elif pide_timba:
         muestra = random.sample(CATALOGO_DINAMICO["timba"], min(3, len(CATALOGO_DINAMICO["timba"])))
         return f"🇨🇺 **Sugerencias de Timba Cubana:**\n\n" + "\n".join([f"• {c}" for c in muestra])
+
     elif pide_bachata:
         muestra = random.sample(CATALOGO_DINAMICO["bachata"], min(2, len(CATALOGO_DINAMICO["bachata"])))
         return f"🇩🇴 **Sugerencias de Bachata:**\n\n" + "\n".join([f"• {c}" for c in muestra])
+
+    elif pide_salsa:
+        muestra = random.sample(CATALOGO_DINAMICO["salsa"], min(2, len(CATALOGO_DINAMICO["salsa"])))
+        return f"🎺 **Sugerencias de Salsa:**\n\n" + "\n".join([f"• {c}" for c in muestra])
+
     else:
-        return "💡 Pega un enlace de audio para clasificarlo según su señal física o pídeme sugerencias de **Salsa, Bachata, Quebradita o Timba**."
+        return "💡 Pega un enlace de audio para clasificarlo según su señal física o pídeme sugerencias o tips de vestuario para **Salsa, Bachata, Quebradita o Timba**."
 
 # ==========================================
 # 4. INTERFAZ STREAMLIT
@@ -259,15 +274,34 @@ st.markdown('<div class="sub-header">Análisis métrico de audio e interpretaci�
 tabs = st.tabs(["💬 Chat Asistente", "📊 Historial & Métricas", "ℹ️ Acerca del Modelo"])
 
 with tabs[0]:
-    for msg in st.session_state.messages:
+    for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            # Si el mensaje incluye una ficha técnica lista para descargar
+            if "download_data" in msg:
+                st.download_button(
+                    label="📄 Descargar Ficha Técnica (.txt)",
+                    data=msg["download_data"],
+                    file_name=f"ficha_tecnica_{msg['file_title']}.txt",
+                    mime="text/plain",
+                    key=f"dl_btn_{idx}"
+                )
 
 with tabs[1]:
     st.subheader("📈 Resumen de Evaluaciones de la Sesión")
     if st.session_state.historial_evaluaciones:
         df_hist = pd.DataFrame(st.session_state.historial_evaluaciones)
         st.dataframe(df_hist, use_container_width=True)
+        
+        # Botón de descarga de todo el historial en CSV
+        csv_data = df_hist.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Descargar Historial Completo (.csv)",
+            data=csv_data,
+            file_name="historial_evaluaciones_sincopa.csv",
+            mime="text/csv",
+            key="dl_historial_csv"
+        )
     else:
         st.info("Aún no se han evaluado canciones en esta sesión.")
 
@@ -277,11 +311,9 @@ with tabs[2]:
     Síncopa utiliza un **algoritmo de análisis de señal espectral y Machine Learning** que predice el ritmo basándose exclusivamente en los parámetros físicos del audio:
     
     * **Tempo & Beats (BPM):** Medición de velocidad y pulsaciones por minuto.
-    * **Densidad Tatum / Subdivisión Percusiva:** Evaluación de capas de percusión e instrumentos simultáneos (clave para distinguir Timba vs Bachata).
-    * **Energía Espectral & Acousticness:** Nivel de potencia de la señal frente a instrumentación acústica/orgánica.
-    * **Estructura de Secciones:** Identificación de bloques musicales y cortes (mambo, montuno, despelote).
-    
-    > 🔒 **Independencia de Metadatos:** El modelo no clasifica leyendo títulos, nombres de canciones ni agrupaciones, garantizando precisión sin importar el nombre del artista.
+    * **Densidad Tatum / Subdivisión Percusiva:** Evaluación de capas de percusión e instrumentos simultáneos.
+    * **Energía Espectral & Acousticness:** Nivel de potencia de la señal frente a instrumentación acústica.
+    * **Estructura de Secciones:** Identificación de bloques musicales y cortes.
     """)
 
 # ==========================================
@@ -327,6 +359,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
                     else:
                         prediccion_ml = clasificar_genero_por_audio(analisis)
 
+                    st.session_state.ultimo_genero = prediccion_ml
                     mm = obtener_metricas_multi_modalidad(prediccion_ml, tempo_val)
 
                     registro_sesion = {
@@ -339,16 +372,11 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
                     }
                     st.session_state.historial_evaluaciones.append(registro_sesion)
 
-                    # LEYENDA EXPLICATIVA INCLUIDA EN LA RESPUESTA
-                    leyenda_tecnica = f"""
-> 🎛️ **Nota de Predicción Acústica:** *Clasificación calculada mediante parámetros físicos de la señal de audio (Tempo: **~{tempo_val} BPM**, subdivisión rítmica/beats, energía espectral y densidad percusiva tatum). El modelo ignora títulos y nombres de agrupaciones.*
-"""
-
                     reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
 
-{leyenda_tecnica}
+> 🎛️ **Nota de Predicción Acústica:** *Clasificación calculada mediante parámetros físicos de la señal de audio (Tempo: **~{tempo_val} BPM**, subdivisión rítmica/beats, energía espectral y densidad percusiva tatum).*
 
 ---
 
@@ -368,8 +396,45 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 ### 🏋️ Prep Física & Ejercicios:
 {mm['ejercicios_recomendados']}
 """
+                    # Formato plano para descarga de ficha técnica individual
+                    texto_ficha = f"""==================================================
+SÍNCOPA - FICHA TÉCNICA COREOGRÁFICA
+==================================================
+Canción: {analisis['cancion_formateada']}
+Género Clasificado: {prediccion_ml}
+Tempo Estimado: {tempo_val} BPM
+
+MÉTRICA & RITMO:
+{mm['metrica_ritmo']}
+
+EXIGENCIA FÍSICA:
+- Pareja: {mm['pareja']}/10
+- Grupo: {mm['grupo']}/10
+- Solista: {mm['solista']}/10
+
+PREPARACIÓN FÍSICA RECOMENDADA:
+{mm['ejercicios_recomendados']}
+==================================================
+"""
                     st.markdown(reply)
-                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                    
+                    # Título seguro para el archivo
+                    safe_title = "".join([c if c.isalnum() else "_" for c in analisis['cancion_formateada'][:20]])
+                    
+                    st.download_button(
+                        label="📄 Descargar Ficha Técnica (.txt)",
+                        data=texto_ficha,
+                        file_name=f"ficha_tecnica_{safe_title}.txt",
+                        mime="text/plain",
+                        key=f"dl_btn_instant_{time.time()}"
+                    )
+
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": reply,
+                        "download_data": texto_ficha,
+                        "file_title": safe_title
+                    })
 
         else:
             with st.chat_message("assistant"):
