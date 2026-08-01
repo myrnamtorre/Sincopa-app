@@ -46,7 +46,7 @@ MENSAJE_BIENVENIDA = """👋 **¡Hola! Soy Síncopa, tu asistente de análisis c
 1. 🎧 **Analiza una canción:** Pega cualquier enlace de **Spotify, YouTube, SoundCloud o Apple Music**.
 2. 🔀 **Motor de Clasificación por Audio:** Analiza parámetros acústicos (*Tempo/BPM, pulsos/beats, densidad percusiva*).
 3. 🎙️ **Detección Inteligente:** Distingue entre plataformas de música y videos de pláticas o realities.
-4. 💃 **Aprovechamiento Coreográfico:** Te sugiere en qué enfocar la pista (*Footwork, Shines, Nudos, Acrobacias, etc.*).
+4. 💃 **Aprovechamiento Coreográfico:** Recomienda calificación por modalidad y tips técnicos de aplicación (*Footwork, Shines, Nudos, Acrobacias*).
 
 ---
 💡 *Pega un enlace o escribe tu consulta abajo para comenzar.*"""
@@ -177,32 +177,36 @@ def clasificar_genero_por_audio(features):
 
     return "Timba" if energy > 0.80 else "Salsa"
 
-def obtener_aprovechamiento_coreografico(genero):
+def obtener_detalles_coreograficos(genero):
     if genero == "Bachata":
+        pareja, grupo, solista = 8, 6, 7
         metrica = "📌 **Métrica:** Compás de 4/4. Acentuación en el pulso 4 y 8 con tap / golpe de cadera.\n📌 **Estructura:** Transición marcada entre majao, mambo y derecho."
-        aprovechamiento = """• **Baile en Pareja:** Trabajo de conexión corporal estrecha, marcación de marcos suaves y conducción en guillete/ondas.
-• **Ondas & Body Rolls:** Ideal para disociación de torso y cadera en tiempos lentos o acentuaciones melódicas.
-• **Footwork Sincopado:** Modulaciones de paso en secciones de mambo y acentos de requinto."""
+        aprovechamiento = """• **Baile en Pareja:** Trabajo de conexión corporal estrecha, marco fluido y conducción en guillete u ondas.
+• **Ondas & Body Rolls:** Ideal para disociación de torso y cadera en tiempos lentos o cortes melódicos.
+• **Footwork Sincopado:** Modulaciones de paso en secciones de mambo y acentos del requinto."""
 
     elif genero == "Quebradita":
+        pareja, grupo, solista = 10, 9, 8
         metrica = "📌 **Métrica:** Compás de 2/4 acelerado. Acentuación constante en el bote o brinco.\n📌 **Estructura:** Secciones dinámicas continuas con cambios bruscos de tempo."
-        aprovechamiento = """• **Acrobacias y Alzadas:** Trabajo de cargadas de alto impacto, caídas y remates espectaculares.
-• **Giros y Quebraditas:** Ejecución de giros veloces en pareja y quiebres de cintura (quebradita tradicional).
+        aprovechamiento = """• **Acrobacias y Alzadas:** Trabajo de cargadas de alto impacto, caídas e impulsos espectaculares.
+• **Giros y Quebraditas:** Ejecución de giros veloces en pareja y quiebres de cintura.
 • **Paso Machete & Bote:** Trabajo dinámico de pies y muelles coordinados a máxima velocidad."""
 
     elif genero == "Timba":
+        pareja, grupo, solista = 9, 9, 9
         metrica = "📌 **Métrica:** Clave Cubana / Timba (2/3 o 3/2). Polirritmia compleja, tumbaos marcados y cortes potentes.\n📌 **Estructura:** Intro, verso, montuno, mambo, presión y despelote."
-        aprovechamiento = """• **Nudos y Figuras Casino:** Complejidad en el trabajo de brazos (rueda o pareja), cambios rápidos de dirección y enganches.
-• **Despelote & Muelleo:** Secciones de soltar la pareja para trabajo de cintura, hombros y muelles de rodilla con la percusión.
+        aprovechamiento = """• **Nudos y Figuras Casino:** Complejidad en el trabajo de brazos (pareja o rueda), cambios de dirección y enganches rápidos.
+• **Despelote & Muelleo:** Secciones de soltar la pareja para trabajo libre de cintura, hombros y muelles de rodilla.
 • **Shines y Rumba Cubana:** Desmontes con incorporación de pasos de Guaguancó, Columbia o Afrocubano en los cortes de metales."""
 
     else:  # Salsa
+        pareja, grupo, solista = 9, 8, 9
         metrica = "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos marcados en campana, tumbao y metales.\n📌 **Estructura:** Intro, verso, montuno, mambo y cierre."
         aprovechamiento = """• **Shines & Footwork:** Trabajo veloz de pies, cortes rítmicos y repiques en las secciones instrumentales.
 • **Vueltas en Pareja (Spinning):** Giros múltiples, figuras rápidas de brazos y control del marco postural.
-• **Estilo y Musicalidad:** Acentuación con brazos y torso para interpretar las subidas de los metales y golpes de timbal."""
+• **Estilo y Musicalidad:** Acentuación con brazos y torso para interpretar las subidas de los metales y cierres de timbal."""
 
-    return metrica, aprovechamiento
+    return pareja, grupo, solista, metrica, aprovechamiento
 
 # ==========================================
 # CATÁLOGOS Y RESPUESTAS LIBRES
@@ -287,7 +291,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
                     prediccion_ml = clasificar_genero_por_audio(analisis)
                     st.session_state.ultimo_genero = prediccion_ml
                     
-                    metrica_text, aprovechamiento_text = obtener_aprovechamiento_coreografico(prediccion_ml)
+                    par, grp, sol, metrica_text, aprovechamiento_text = obtener_detalles_coreograficos(prediccion_ml)
 
                     reply = f"""🎵 **Canción:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
@@ -297,6 +301,13 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
 ### 🎼 Marcación Coreográfica & Métrica Musical:
 {metrica_text}
+
+---
+
+### 📊 Calificación por Modalidad de Baile:
+* 👫 **Pareja:** {par} / 10
+* 👯‍♀️ **Grupo:** {grp} / 10
+* 🕺 **Solista:** {sol} / 10
 
 ---
 
