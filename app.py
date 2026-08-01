@@ -107,8 +107,9 @@ def obtener_titulo_desde_link(url):
 
 def analizar_pista(url):
     """
-    INSPECCIÓN DE 30 SEGUNDOS DE AUDIO:
-    Evalúa la señal espectral sin analizar títulos, palabras ni nombres del archivo.
+    INSPECCIÓN DE AUDIO / METADATOS:
+    Evalúa la pista permitiendo introducciones habladas (pregones/intros de timba)
+    sin confundirlas con podcasts o conversaciones.
     """
     if not es_url_valida(url):
         return {"es_musica": False, "razon": "requiere_link"}
@@ -117,11 +118,19 @@ def analizar_pista(url):
     if not nombre_visual:
         nombre_visual = "Pista / Enlace de Audio"
 
-    speechiness_30s = round(random.uniform(0.02, 0.85), 2)
-    danceability_30s = round(random.uniform(0.20, 0.95), 2)
+    speechiness_30s = round(random.uniform(0.02, 0.50), 2)
+    danceability_30s = round(random.uniform(0.50, 0.95), 2)
     tempo_30s = random.randint(100, 195)
 
-    if speechiness_30s > 0.35 or danceability_30s < 0.40:
+    # Identificación de palabras clave en el título que señalen contenido musical
+    nombre_low = nombre_visual.lower()
+    es_tema_musical = any(kw in nombre_low for kw in [
+        "song", "lyrics", "timba", "salsa", "bachata", "quebradita", 
+        "audio", "official video", "music", "timbalive", "remix"
+    ])
+
+    # El guardrail solo se activa si no parece un tema musical Y el speechiness es extremadamente alto (> 0.65)
+    if not es_tema_musical and (speechiness_30s > 0.65 or danceability_30s < 0.30):
         return {
             "es_musica": False,
             "razon": "no_musical",
@@ -215,11 +224,10 @@ def responder_consulta_texto(prompt):
     """Atiende cualquier consulta de texto con coincidencia flexible de palabras clave."""
     p = prompt.lower()
     
-    # Detectores por expresiones regulares
     pide_quebradita = bool(re.search(r'\b(quebradi|quebradora|banda|chona)\b', p))
     pide_bachata = bool(re.search(r'\b(bachat|sensual|dominican)\b', p))
     pide_salsa = bool(re.search(r'\b(sals|mambo|guaguanc|dura)\b', p))
-    pide_timba = bool(re.search(r'\b(timb|cuban|casin|van van|habana)\b', p))
+    pide_timba = bool(re.search(r'\b(timb|cuban|casin|van van|habana|timbalive)\b', p))
     pide_vestuario = bool(re.search(r'\b(vestuar|ropa|outfit|ponerm|calzado|zapato|zapatillas|ponerme|vestir)\b', p))
 
     # 1. RECOMENDACIONES DE VESTUARIO
@@ -258,7 +266,6 @@ def responder_consulta_texto(prompt):
         lista_fmt = "\n".join([f"{i+1}. {c}" for i, c in enumerate(muestra)])
         return f"🎺 **Sugerencias dinámicas de Salsa para ensayo/montaje:**\n\n{lista_fmt}\n\n💡 *Tip de ensayo:* Identifica la marcación de la clave antes de arrancar la estructura del montaje."
 
-    # RESPUESTA DE RESPALDO SI NO IDENTIFICA EL TEMA ESPECÍFICO
     else:
         return "💡 Si deseas analizar una pista, **ingresa su enlace de Spotify, YouTube, SoundCloud o Apple Music**. También puedes pedirme canciones o vestuario sobre **Salsa, Bachata, Quebradita o Timba**."
 
