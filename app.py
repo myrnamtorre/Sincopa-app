@@ -136,12 +136,6 @@ def obtener_titulo_desde_link(url):
 
 
 def analizar_audio_primeros_30s(url):
-  """Descarga de forma temporal y procesa exclusivamente los primeros 30 segundos
-
-  del audio utilizando librosa para extraer métricas acústicas reales (speechiness,
-  spectral flatness, zero crossing rate y tempo), eliminando cualquier
-  dependencia del título.
-  """
   nombre_visual = obtener_titulo_desde_link(url)
 
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
@@ -164,19 +158,19 @@ def analizar_audio_primeros_30s(url):
 
     archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
 
-    # Carga estricta de los primeros 30 segundos
     y, sr = librosa.load(archivo_final, duration=30.0, sr=22050)
 
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extracción de características acústicas puras sobre el segmento inicial
+    # Extracción de características acústicas
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
-    speechiness_est = float(np.clip(flatness * 2.5 + zcr * 0.5, 0.0, 1.0))
 
-    # Detección puramente acústica de contenido hablado / podcast en los primeros 30s
-    if flatness > 0.04 or zcr > 0.10 or speechiness_est > 0.30:
+    # Umbral acústico refinado para detección estricta de voz / locución en los primeros 30s
+    speechiness_est = float(np.clip(flatness * 3.5 + zcr * 0.8, 0.0, 1.0))
+
+    if flatness > 0.025 or zcr > 0.075 or speechiness_est > 0.22:
       return {
           "es_musica": False,
           "cancion_formateada": nombre_visual,
@@ -192,7 +186,6 @@ def analizar_audio_primeros_30s(url):
           "num_tiempos_beats": 8,
       }
 
-    # Extracción de tempo y atributos musicales con librosa
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
     if tempo_val < 60:
@@ -266,7 +259,7 @@ def analizar_audio_primeros_30s(url):
 def clasificar_genero_por_audio(features):
   global modelo
 
-  if not features.get("es_musica", True) or features.get("speechiness", 0) > 0.30:
+  if not features.get("es_musica", True) or features.get("speechiness", 0) > 0.22:
     return "No Musical / Contenido Hablado"
 
   if features["tempo"] > 170.0:
