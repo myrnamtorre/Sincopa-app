@@ -172,7 +172,6 @@ def analizar_audio_primeros_30s(url):
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
 
-    # Filtro flexible: si hay dudas en la intro, pasamos al modelo con valores base estables
     if len(beats) < 2 or spec_flatness > 0.15 or zcr > 0.22:
       return {
           "es_musica": True,
@@ -260,7 +259,8 @@ def clasificar_genero_por_audio(features):
   if not features.get("es_musica", True):
     return "No Musical / Contenido Hablado"
 
-  if features["tempo"] > 170.0:
+  # Regla de negocio estricta para asegurar que ritmos rápidos o de banda/quebradita no caigan en salsa
+  if features["tempo"] >= 170.0:
     return "Quebradita"
 
   if modelo is not None:
