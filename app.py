@@ -39,12 +39,12 @@ def cargar_modelo():
 
 modelo = cargar_modelo()
 
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibrador Acústico de Géneros.**
+MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibración Acústica & Reentrenamiento.**
 
 ### 📚 Guía Rápida de Uso:
 1. 🎧 **Analiza una canción:** Pega cualquier enlace musical.
 2. 🏷️ **Metadatos Limpios:** Captura precisa del título original.
-3. 🤖 **Inferencia y Corrección de Sesgo:** El sistema procesa el vector y corrige desvíos históricos del modelo `.joblib`.
+3. 🤖 **Inferencia y Propuestas de Entrenamiento:** El sistema procesa el vector, corrige desvíos y te sugiere mejoras para el modelo `.joblib`.
 
 ---
 💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
@@ -139,8 +139,6 @@ def clasificar_genero_por_audio(features):
         return "No Musical / Contenido Hablado"
 
     # CORRECCIÓN DE SESGO CRÍTICO DEL MODELO: 
-    # Si el tempo supera los 170 BPM, ninguna salsa real opera a esa velocidad (la salsa estándar ronda 150-165 BPM).
-    # Forzamos la etiqueta correcta que el modelo `.joblib` confunde debido a su entrenamiento.
     if features['tempo'] > 170.0:
         return "Quebradita"
 
@@ -204,7 +202,7 @@ def responder_consulta_texto(prompt):
     elif any(kw in p for kw in ["timb", "cuban"]):
         return "🇨🇺 **Sugerencias de Timba Cubana:**\n\n" + "\n".join([f"• {c}" for c in CATALOGO_DINAMICO["timba"]])
     elif any(kw in p for kw in ["bachat"]):
-        return "🇩🇴 **Sugerencias de Bachata:**\n\n" + "\n".join([f"• {c}" for c in CATALOGO_DINAMICO["bachata"]])
+        return "🇩🇴 **Sugerencias de Bachata:**\n\n" + "\n".join([f"• {c}" for c in CATALOGO_DINAMigin["bachata"]])
     elif any(kw in p for kw in ["sals"]):
         return "🎺 **Sugerencias de Salsa:**\n\n" + "\n".join([f"• {c}" for c in CATALOGO_DINAMICO["salsa"]])
     else:
@@ -216,7 +214,7 @@ def responder_consulta_texto(prompt):
 st.markdown('<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Análisis métrico de audio e interpretación de ritmos</div>', unsafe_allow_html=True)
 
-tabs = st.tabs(["💬 Chat Asistente", "📊 Historial & Métricas", "ℹ️ Acerca del Modelo"])
+tabs = st.tabs(["💬 Chat Asistente", "📊 Historial & Métricas", "⚙️ Entrenamiento & Calibración"])
 
 with tabs[0]:
     for idx, msg in enumerate(st.session_state.messages):
@@ -232,11 +230,19 @@ with tabs[1]:
         st.info("Aún no se han evaluado canciones en esta sesión.")
 
 with tabs[2]:
-    st.subheader("⚙️ Motor de Clasificación Acústica (.joblib)")
-    if modelo is not None:
-        st.success("✅ Modelo `.joblib` cargado con calibración de umbrales rítmicos.")
-    else:
-        st.error("❌ No se encontró ningún archivo `.joblib` en el directorio de trabajo.")
+    st.subheader("🧠 Panel de Reentrenamiento y Ajuste del Modelo")
+    st.markdown("""
+    Si notas que el modelo `.joblib` original presenta sesgos en ciertos rangos de BPM (como confundir tempos mayores a 170 BPM con Salsa), puedes planificar una rutina de reentrenamiento incorporando este vector corregido al dataset base.
+    """)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.info("📊 **Estado del Dataset:**\n• Se recomienda añadir al menos **50 muestras de Quebradita/Banda** con tempos de 175-190 BPM para eliminar la necesidad de parches lógicos externos.")
+    with col2:
+        if st.button("🚀 Simular Reentrenamiento del Modelo (.joblib)"):
+            with st.spinner("Actualizando pesos del modelo con nuevas muestras rítmicas..."):
+                time.sleep(1.2)
+            st.success("✨ ¡Simulación completada! En un entorno de producción, aquí reentrenarías tu clasificador con scikit-learn y sobrescribirías el archivo joblib.")
 
 # ==========================================
 # 5. ENTRADA DEL CHAT
@@ -268,6 +274,11 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
                     tempo_val = analisis["tempo"]
                     par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = obtener_detalles_coreograficos(prediccion_ml)
 
+                    # Bloque explicativo de entrenamiento sugerido si el tempo es extremo
+                    entrenamiento_sugerido = ""
+                    if tempo_val > 170.0:
+                        entrenamiento_sugerido = "\n\n💡 **Sugerencia de Entrenamiento:** *Este archivo presenta un tempo elevado (>170 BPM). Considera agregarlo a tu dataset de entrenamiento en la pestaña '⚙️ Entrenamiento & Calibración' para calibrar permanentemente el árbol de decisión del `.joblib`.*"
+
                     reply = f"""🎵 **Pista Analizada:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
@@ -293,7 +304,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 ---
 
 ### 👗 Sugerencia de Vestuario:
-{vestuario_text}
+{vestuario_text}{entrenamiento_sugerido}
 """
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
