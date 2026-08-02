@@ -1,4 +1,5 @@
 import os
+import tempfile
 import time
 import joblib
 import librosa
@@ -195,9 +196,8 @@ def analizar_audio_primeros_30s(url):
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
     if tempo_val < 60:
-      tempo_val *= 2  # Corrección de octava rítmica si fuera necesario
+      tempo_val *= 2
 
-    # Perfiles basados en el vector acústico extraído
     if tempo_val > 170.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -247,7 +247,6 @@ def analizar_audio_primeros_30s(url):
     }
 
   except Exception as e:
-    # Fallback seguro en caso de error de red o descarga temporal
     return {
         "es_musica": True,
         "cancion_formateada": nombre_visual,
