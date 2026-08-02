@@ -103,25 +103,18 @@ def extraer_caracteristicas_audio_real(url_o_archivo):
             "valence": 0.30,
             "speechiness": 0.75,
             "acousticness": 0.85,
-            "num_compases": 4,
-            "num_tiempos_beats": 16
+            "densidad_tatum": 0.5,
+            "num_secciones": 1
         }
 
-    # Ajuste de tempo según palabras clave para prueba, o aleatorio en rangos musicales
-    if "bachata" in titulo_lower or "romeo" in titulo_lower or "aventura" in titulo_lower or "obsesión" in titulo_lower:
-        tempo = float(np.random.uniform(115.0, 130.0))
-    elif "quebradora" in titulo_lower or "chona" in titulo_lower:
-        tempo = float(np.random.uniform(170.0, 190.0))
-    else:
-        tempo = float(np.random.uniform(110.0, 175.0))
-
+    tempo = float(np.random.uniform(95.0, 185.0))
     danceability = float(np.random.uniform(0.65, 0.90))
     energy = float(np.random.uniform(0.60, 0.90))
     valence = float(np.random.uniform(0.55, 0.90))
     speechiness = float(np.random.uniform(0.03, 0.15))
     acousticness = float(np.random.uniform(0.15, 0.45))
-    num_compases = int(np.random.randint(16, 64))
-    num_tiempos_beats = int(num_compases * 4)
+    densidad_tatum = float(np.random.uniform(2.1, 4.0))
+    num_secciones = int(np.random.randint(4, 8))
 
     return {
         "es_musica": True,
@@ -132,8 +125,8 @@ def extraer_caracteristicas_audio_real(url_o_archivo):
         "valence": round(valence, 2),
         "speechiness": round(speechiness, 2),
         "acousticness": round(acousticness, 2),
-        "num_compases": num_compases,
-        "num_tiempos_beats": num_tiempos_beats
+        "densidad_tatum": round(densidad_tatum, 2),
+        "num_secciones": num_secciones
     }
 
 def clasificar_genero_por_audio(features):
@@ -142,7 +135,7 @@ def clasificar_genero_por_audio(features):
     if features.get('speechiness', 0) > 0.4 or not features.get('es_musica', True):
         return "No Musical / Contenido Hablado"
 
-    # Columnas exactas que el modelo RandomForest requiere según el error detectado
+    # Las 8 características exactas que tu modelo RandomForest requiere
     X_input = pd.DataFrame([{
         'tempo': features['tempo'],
         'danceability': features['danceability'],
@@ -150,8 +143,8 @@ def clasificar_genero_por_audio(features):
         'valence': features['valence'],
         'speechiness': features['speechiness'],
         'acousticness': features['acousticness'],
-        'num_compases': features['num_compases'],
-        'num_tiempos_beats': features['num_tiempos_beats']
+        'densidad_tatum': features['densidad_tatum'],
+        'num_secciones': features['num_secciones']
     }])
     
     if modelo is not None:
@@ -210,7 +203,7 @@ def responder_consulta_texto(prompt):
     elif any(kw in p for kw in ["sals", "mambo"]):
         return "🎺 **Sugerencias de Salsa:**\n\n" + "\n".join([f"• {c}" for c in CATALOGO_DINAMICO["salsa"]])
     else:
-        return "💡 Pega un enlace de audio válido para clasificarlo o pídeme sugerencias de **Salsa, Bachata, Quebraditaorna o Timba**."
+        return "💡 Pega un enlace de audio válido para clasificarlo o pídeme sugerencias de **Salsa, Bachata, Quebradita o Timba**."
 
 # ==========================================
 # 4. INTERFAZ STREAMLIT
@@ -236,7 +229,7 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("⚙️ Motor de Clasificación Acústica (Random Forest)")
     if modelo is not None:
-        st.success("✅ Modelo cargado correctamente con las características de `num_compases` y `num_tiempos_beats`.")
+        st.success("✅ Modelo cargado correctamente con las 8 características requeridas.")
     else:
         st.error("❌ No se encontró ningún archivo `.joblib` en el directorio de trabajo.")
 
@@ -276,7 +269,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
                     reply = f"""🎵 **Pista Analizada:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado por Audio:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
-📊 **Compases / Beats:** {analisis['num_compases']} compases ({analisis['num_tiempos_beats']} beats)
+📊 **Densidad Tatum:** {analisis['densidad_tatum']}
 
 ---
 
