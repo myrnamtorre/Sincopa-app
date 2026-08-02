@@ -163,37 +163,25 @@ def analizar_audio_primeros_30s(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
+    # Extracción de características reales
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
     if tempo_val < 60:
       tempo_val *= 2
 
+    # Análisis para detectar si es voz hablada / podcast / contenido no musical
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
+    rms = np.mean(librosa.feature.melspectrogram(y=y, sr=sr))
 
-    # Si el título o el enlace contiene indicios de banda/quebradita, o el tempo real es alto, lo tratamos como tal
-    if (
-        "quebradita" in nombre_visual.lower()
-        or "banda" in nombre_visual.lower()
-        or tempo_val >= 165.0
-    ):
-      return {
-          "es_musica": True,
-          "cancion_formateada": nombre_visual,
-          "tempo": max(tempo_val, 178.0),
-          "danceability": 0.89,
-          "energy": 0.92,
-          "valence": 0.86,
-          "speechiness": 0.05,
-          "acousticness": 0.12,
-          "densidad_tatum": 4.3,
-          "num_secciones": 5,
-          "num_compases": 32,
-          "num_tiempos_beats": max(int(len(beats)), 128),
-      }
+    # Criterio estricto de rechazo para charlas, entrevistas o videos sin estructura musical percusiva
+    # (Evaluamos si hay muy pocos beats detectados o si el perfil espectral es típico de voz humana)
+    if len(beats) < 10 or spec_flatness > 0.12:
+      return {"es_musica": False, "cancion_formateada": nombre_visual}
 
-    if tempo_val > 170.0:
+    # Asignación de características basada estrictamente en el tempo real detectado
+    if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
           0.92,
@@ -242,20 +230,7 @@ def analizar_audio_primeros_30s(url):
     }
 
   except Exception as e:
-    return {
-        "es_musica": True,
-        "cancion_formateada": nombre_visual,
-        "tempo": 178.0,
-        "danceability": 0.89,
-        "energy": 0.92,
-        "valence": 0.86,
-        "speechiness": 0.05,
-        "acousticness": 0.12,
-        "densidad_tatum": 4.3,
-        "num_secciones": 5,
-        "num_compases": 32,
-        "num_tiempos_beats": 128,
-    }
+    return {"es_musica": False, "cancion_formateada": nombre_visual}
 
 
 def clasificar_genero_por_audio(features):
@@ -264,12 +239,8 @@ def clasificar_genero_por_audio(features):
   if not features.get("es_musica", True):
     return "No Musical / Contenido Hablado"
 
-  # Forzamos Quebradita si el nombre o el tempo reflejan música de banda/quebradita
-  if (
-      features["tempo"] >= 165.0
-      or "quebradora" in features["cancion_formateada"].lower()
-      or "banda" in features["cancion_formateada"].lower()
-  ):
+  # Regla estricta basada en el tempo real medido por librosa
+  if features["tempo"] >= 165.0:
     return "Quebradita"
 
   if modelo is not None:
