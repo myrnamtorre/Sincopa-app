@@ -141,7 +141,6 @@ def clasificar_genero_por_audio(features):
     if features.get('speechiness', 0) > 0.4 or not features.get('es_musica', True):
         return "No Musical / Contenido Hablado"
 
-    # Pasamos los valores directamente como arreglo numpy para evitar conflictos de nombres de columnas
     X_input = np.array([[
         features['tempo'],
         features['danceability'],
@@ -259,7 +258,10 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
                 prediccion_ml = clasificar_genero_por_audio(analisis)
 
-                if prediccion_ml == "No Musical / Contenido Hablado":
+                titulo_lower = analisis['cancion_formateada'].lower()
+                es_falsa_alarma_hablada = any(kw in titulo_lower for kw in ["quebradora", "quebradita", "tucanes", "banda"])
+
+                if prediccion_ml == "No Musical / Contenido Hablado" and not es_falsa_alarma_hablada:
                     reply = f"""⚠️ **Contenido No Musical Detectado**
                     
 🎵 **Pista / Video Analizado:** *{analisis['cancion_formateada']}*  
@@ -271,6 +273,9 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
                 else:
+                    if analisis['tempo'] > 165 and any(kw in titulo_lower for kw in ["quebradora", "quebradita", "banda", "chona"]):
+                        prediccion_ml = "Quebradita"
+
                     tempo_val = analisis["tempo"]
                     par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = obtener_detalles_coreograficos(prediccion_ml)
 
