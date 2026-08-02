@@ -17,8 +17,6 @@ st.markdown(
     " baile."
 )
 
----
-
 # Campo de entrada para la URL
 url_video = st.text_input("URL del video de YouTube:")
 
@@ -70,8 +68,6 @@ def es_contenido_hablado(y_seg, sr):
     return True
   return False
 
-
----
 
 # Lógica principal de ejecución al presionar el botón
 if st.button("Analizar Pista"):
