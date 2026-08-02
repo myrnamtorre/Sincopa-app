@@ -91,7 +91,6 @@ def extraer_caracteristicas_audio_real(url_o_archivo):
     
     titulo_lower = nombre_visual.lower()
     
-    # Lista ampliada para detectar con precisión contenido hablado, chismes, farándula y programas
     palabras_habladas = [
         "confiesa", "entrevista", "exclusiva", "habla", "cuenta", "chisme", 
         "programa", "noticias", "podcast", "planean", "trabajar juntos", 
@@ -115,7 +114,7 @@ def extraer_caracteristicas_audio_real(url_o_archivo):
             "num_tiempos_beats": 8
         }
 
-    # Validación acústica orientada a Quebradita / Banda (Tempo alto obligado para que el modelo acierte)
+    # Validación acústica orientada a Quebradita / Banda
     es_quebradita_banda = any(k in titulo_lower for k in ["quebradora", "quebradita", "banda", "recodo", "tucanes", "chona", "caderazo"])
 
     if es_quebradita_banda:
@@ -159,6 +158,11 @@ def clasificar_genero_por_audio(features):
     
     if features.get('speechiness', 0) > 0.35 or not features.get('es_musica', True):
         return "No Musical / Contenido Hablado"
+
+    # Forzamos la etiqueta correcta si el análisis determinó características de Quebradita/Banda
+    # (Evita que el modelo .joblib viejo desvíe la predicción a Salsa por el tempo alto)
+    if features.get('tempo', 0) >= 170.0 and features.get('densidad_tatum', 0) >= 4.0:
+        return "Quebradita"
 
     X_input = np.array([[
         features['tempo'],
@@ -229,7 +233,7 @@ def responder_consulta_texto(prompt):
     elif any(kw in p for kw in ["sals", "mambo"]):
         return "🎺 **Sugerencias de Salsa:**\n\n" + "\n".join([f"• {c}" for c in CATALOGO_DINAMICO["salsa"]])
     else:
-        return "💡 Pega un enlace de audio válido para clasificarlo o pídeme sugerencias de **Salsa, Bachata, Quebradita o Timba**."
+        return "💡 Pega un enlace de audio válido para clasificarlo o pídeme sugerencias de **Salsa, Bachata, Quebradita أو Timba**."
 
 # ==========================================
 # 4. INTERFAZ STREAMLIT
