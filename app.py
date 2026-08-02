@@ -163,14 +163,15 @@ def analizar_audio_primeros_30s(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extracción de características acústicas
+    # Extracción 100% acústica pura (sin listas de palabras)
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
+    centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
 
-    # Umbral acústico refinado para detección estricta de voz / locución en los primeros 30s
-    speechiness_est = float(np.clip(flatness * 3.5 + zcr * 0.8, 0.0, 1.0))
+    speechiness_est = float(np.clip(flatness * 4.0 + zcr * 1.0, 0.0, 1.0))
 
-    if flatness > 0.025 or zcr > 0.075 or speechiness_est > 0.22:
+    # Umbral puramente matemático para detectar voz o contenido hablado
+    if flatness > 0.018 or zcr > 0.055 or centroid > 2500 or speechiness_est > 0.15:
       return {
           "es_musica": False,
           "cancion_formateada": nombre_visual,
@@ -259,7 +260,7 @@ def analizar_audio_primeros_30s(url):
 def clasificar_genero_por_audio(features):
   global modelo
 
-  if not features.get("es_musica", True) or features.get("speechiness", 0) > 0.22:
+  if not features.get("es_musica", True) or features.get("speechiness", 0) > 0.15:
     return "No Musical / Contenido Hablado"
 
   if features["tempo"] > 170.0:
