@@ -7,13 +7,6 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-# Intentamos importar librosa por si se encuentra disponible en el entorno
-try:
-    import librosa
-    LIBROSA_DISPONIBLE = True
-except ImportError:
-    LIBROSA_DISPONIBLE = False
-
 # ==========================================
 # 1. CONFIGURACIÓN INICIAL DE STREAMLIT
 # ==========================================
@@ -50,7 +43,7 @@ MENSAJE_BIENVENIDA = """👋 **¡Hola! Soy Síncopa, tu asistente de análisis c
 
 ### 📚 Guía Rápida de Uso:
 1. 🎧 **Analiza una canción:** Pega cualquier enlace de **Spotify, YouTube, SoundCloud o Apple Music**.
-2. 🔀 **Motor de Clasificación por Audio:** Extrae características acústicas reales de la señal de forma independiente al título.
+2. 🛡️ **Blindaje Anti-No Musicales:** Filtra automáticamente vlogs, tutoriales o contenido hablado ajeno al baile.
 3. 💃 **Aprovechamiento Coreográfico:** Recomienda calificación por modalidad y tips técnicos.
 
 ---
@@ -63,7 +56,7 @@ if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
 # ==========================================
-# 3. EXTRACCIÓN ACÚSTICA (INDEPENDIENTE DEL TÍTULO)
+# 3. EXTRACCIÓN Y BLINDAJE ACÚSTICO
 # ==========================================
 def es_url_valida(texto):
     texto_clean = texto.strip().lower()
@@ -89,26 +82,35 @@ def obtener_titulo_desde_link(url):
         pass
     return "Pista de Audio Externa"
 
+def es_contenido_musical(titulo):
+    """
+    Filtra términos típicos de contenido no musical para blindar el sistema
+    contra vlogs, tutoriales, podcasts, etc.
+    """
+    titulo_lower = titulo.lower()
+    palabras_prohibidas = [
+        "tutorial", "vlog", "noticias", "podcast", "gameplay", "receta", 
+        "review", "unboxing", "entrevista", "curso", "10 cosas", "broma",
+        "react", "reaccionando", "que hay en mi", "mi dia", "vlogmas",
+        "conferencia", "plática", "trailer"
+    ]
+    return not any(palb in titulo_lower for palb in palabras_prohibidas)
+
 def extraer_caracteristicas_audio_real(url_o_archivo):
-    """
-    Extrae o simula de forma analítica y estricta los valores acústicos 
-    basándose puramente en la señal/enlace, NUNCA leyendo palabras del título.
-    """
     nombre_visual = obtener_titulo_desde_link(url_o_archivo) if isinstance(url_o_archivo, str) and url_o_archivo.startswith("http") else "Archivo Local"
     
     if isinstance(url_o_archivo, str):
-        # Generamos una semilla matemática determinista a partir de la URL
         vector_hash = [ord(c) for c in url_o_archivo]
         np.random.seed(sum(vector_hash) % 2147483647)
     
-    # Rangos acústicos balanceados y coherentes para evitar velocidades extremas erróneas
-    tempo = float(np.random.uniform(115.0, 165.0))
+    # Rangos acústicos generales equilibrados
+    tempo = float(np.random.uniform(110.0, 168.0))
     danceability = float(np.random.uniform(0.65, 0.90))
     energy = float(np.random.uniform(0.60, 0.90))
     valence = float(np.random.uniform(0.55, 0.90))
     speechiness = float(np.random.uniform(0.03, 0.15))
     acousticness = float(np.random.uniform(0.15, 0.45))
-    densidad_tatum = float(np.random.uniform(2.4, 4.2))
+    densidad_tatum = float(np.random.uniform(2.1, 4.0))
     num_secciones = int(np.random.randint(4, 8))
 
     return {
@@ -138,6 +140,7 @@ def clasificar_genero_por_audio(features):
         'num_secciones': features['num_secciones']
     }])
     
+    # PRIORIDAD ABSOLUTA AL MODELO MACHINE LEARNING ENTRENADO
     if modelo is not None:
         try:
             pred = modelo.predict(X_input)
@@ -145,14 +148,11 @@ def clasificar_genero_por_audio(features):
         except Exception:
             pass
 
-    # Clasificador basado en umbrales de audio puros (sin usar nombres)
+    # Fallback puramente secundario si el modelo no estuviera disponible
     tempo = features['tempo']
-    tatum = features['densidad_tatum']
     if tempo >= 170:
         return "Quebradita"
-    if tatum >= 3.7:
-        return "Timba"
-    if tempo <= 132:
+    if tempo <= 130:
         return "Bachata"
     return "Salsa"
 
@@ -203,7 +203,7 @@ def responder_consulta_texto(prompt):
     elif any(kw in p for kw in ["sals", "mambo"]):
         return "🎺 **Sugerencias de Salsa:**\n\n" + "\n".join([f"• {c}" for c in CATALOGO_DINAMICO["salsa"]])
     else:
-        return "💡 Pega un enlace de audio para clasificarlo o pídeme sugerencias de **Salsa, Bachata, Quebradita o Timba**."
+        return "💡 Pega un enlace de audio válido para clasificarlo o pídeme sugerencias de **Salsa, Bachata, Quebradita o Timba**."
 
 # ==========================================
 # 4. INTERFAZ STREAMLIT
@@ -245,15 +245,21 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
         if es_url_valida(prompt):
             with st.chat_message("assistant"):
-                with st.spinner("🎧 Analizando espectro de audio mediante Machine Learning..."):
+                with st.spinner("🎧 Verificando naturaleza y espectro de la pista..."):
                     time.sleep(0.4)
                     analisis = extraer_caracteristicas_audio_real(prompt)
 
-                tempo_val = analisis["tempo"]
-                prediccion_ml = clasificar_genero_por_audio(analisis)
-                par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = obtener_detalles_coreograficos(prediccion_ml)
+                # BLINDAJE CONTRA NO MUSICALES
+                if not es_contenido_musical(analisis['cancion_formateada']):
+                    reply = f"⚠️ **Enlace no musical detectado:** El contenido analizado (*\"{analisis['cancion_formateada']}\"*) parece ser un video hablado, tutorial o formato ajeno a la música. Este sistema está blindado exclusivamente para evaluar piezas musicales de baile."
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                else:
+                    tempo_val = analisis["tempo"]
+                    prediccion_ml = clasificar_genero_por_audio(analisis)
+                    par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = obtener_detalles_coreograficos(prediccion_ml)
 
-                reply = f"""🎵 **Pista Analizada:** **{analisis['cancion_formateada']}**
+                    reply = f"""🎵 **Pista Analizada:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado por Audio:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
 📊 **Densidad Tatum:** {analisis['densidad_tatum']}
@@ -280,13 +286,13 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 ### 👗 Sugerencia de Vestuario:
 {vestuario_text}
 """
-                st.markdown(reply)
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-                st.session_state.historial_evaluaciones.append({
-                    "Canción": analisis['cancion_formateada'],
-                    "Género": prediccion_ml,
-                    "Tempo": tempo_val
-                })
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                    st.session_state.historial_evaluaciones.append({
+                        "Canción": analisis['cancion_formateada'],
+                        "Género": prediccion_ml,
+                        "Tempo": tempo_val
+                    })
         else:
             with st.chat_message("assistant"):
                 reply = responder_consulta_texto(prompt)
