@@ -104,7 +104,9 @@ def extraer_caracteristicas_audio_real(url_o_archivo):
             "speechiness": 0.75,
             "acousticness": 0.85,
             "densidad_tatum": 0.5,
-            "num_secciones": 1
+            "num_secciones": 1,
+            "num_compases": 4,
+            "num_tiempos_beats": 16
         }
 
     tempo = float(np.random.uniform(95.0, 185.0))
@@ -115,6 +117,8 @@ def extraer_caracteristicas_audio_real(url_o_archivo):
     acousticness = float(np.random.uniform(0.15, 0.45))
     densidad_tatum = float(np.random.uniform(2.1, 4.0))
     num_secciones = int(np.random.randint(4, 8))
+    num_compases = int(np.random.randint(16, 64))
+    num_tiempos_beats = int(num_compases * 4)
 
     return {
         "es_musica": True,
@@ -126,7 +130,9 @@ def extraer_caracteristicas_audio_real(url_o_archivo):
         "speechiness": round(speechiness, 2),
         "acousticness": round(acousticness, 2),
         "densidad_tatum": round(densidad_tatum, 2),
-        "num_secciones": num_secciones
+        "num_secciones": num_secciones,
+        "num_compases": num_compases,
+        "num_tiempos_beats": num_tiempos_beats
     }
 
 def clasificar_genero_por_audio(features):
@@ -135,7 +141,7 @@ def clasificar_genero_por_audio(features):
     if features.get('speechiness', 0) > 0.4 or not features.get('es_musica', True):
         return "No Musical / Contenido Hablado"
 
-    # Las 8 características exactas que tu modelo RandomForest requiere
+    # Las 10 características exactas que tu modelo RandomForest requiere
     X_input = pd.DataFrame([{
         'tempo': features['tempo'],
         'danceability': features['danceability'],
@@ -144,7 +150,9 @@ def clasificar_genero_por_audio(features):
         'speechiness': features['speechiness'],
         'acousticness': features['acousticness'],
         'densidad_tatum': features['densidad_tatum'],
-        'num_secciones': features['num_secciones']
+        'num_secciones': features['num_secciones'],
+        'num_compases': features['num_compases'],
+        'num_tiempos_beats': features['num_tiempos_beats']
     }])
     
     if modelo is not None:
@@ -229,7 +237,7 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("⚙️ Motor de Clasificación Acústica (Random Forest)")
     if modelo is not None:
-        st.success("✅ Modelo cargado correctamente con las 8 características requeridas.")
+        st.success("✅ Modelo cargado correctamente con las 10 características requeridas.")
     else:
         st.error("❌ No se encontró ningún archivo `.joblib` en el directorio de trabajo.")
 
