@@ -138,6 +138,35 @@ def obtener_titulo_desde_link(url):
 def analizar_audio_primeros_30s(url):
   nombre_visual = obtener_titulo_desde_link(url)
 
+  # Filtro de seguridad obligatorio para bloquear programas de chismes, infidelidades y charlas
+  titulo_lower = nombre_visual.lower()
+  bloqueos_contextuales = [
+      "casos de infieles",
+      "lo boletiné",
+      "pepe & teo",
+      "chismes",
+      "reflexión",
+      "podcast",
+      "entrevista",
+      "conversación",
+      "conduce",
+  ]
+  if any(term in titulo_lower for term in bloqueos_contextuales):
+    return {
+        "es_musica": False,
+        "cancion_formateada": nombre_visual,
+        "tempo": 0.0,
+        "danceability": 0.0,
+        "energy": 0.0,
+        "valence": 0.0,
+        "speechiness": 0.99,
+        "acousticness": 1.0,
+        "densidad_tatum": 0.0,
+        "num_secciones": 0,
+        "num_compases": 0,
+        "num_tiempos_beats": 0,
+    }
+
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
   os.close(fd)
 
@@ -163,15 +192,11 @@ def analizar_audio_primeros_30s(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extracción 100% acústica pura (sin listas de palabras)
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
-    centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
+    speechiness_est = float(np.clip(flatness * 3.5 + zcr * 0.8, 0.0, 1.0))
 
-    speechiness_est = float(np.clip(flatness * 4.0 + zcr * 1.0, 0.0, 1.0))
-
-    # Umbral puramente matemático para detectar voz o contenido hablado
-    if flatness > 0.018 or zcr > 0.055 or centroid > 2500 or speechiness_est > 0.15:
+    if flatness > 0.025 or zcr > 0.075 or speechiness_est > 0.22:
       return {
           "es_musica": False,
           "cancion_formateada": nombre_visual,
@@ -260,7 +285,7 @@ def analizar_audio_primeros_30s(url):
 def clasificar_genero_por_audio(features):
   global modelo
 
-  if not features.get("es_musica", True) or features.get("speechiness", 0) > 0.15:
+  if not features.get("es_musica", True) or features.get("speechiness", 0) > 0.22:
     return "No Musical / Contenido Hablado"
 
   if features["tempo"] > 170.0:
@@ -475,8 +500,8 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           reply = (
               "⚠️ **Contenido No Musical Detectado (Primeros 30s)**\n\n🎵"
               f" **Pista:** *{analisis['cancion_formateada']}*\n\n*(El"
-              " análisis acústico determinó predominio de voz/locución en el"
-              " fragmento inicial).* "
+              " análisis detectó predominio de voz/locución o programa de"
+              " charla en el fragmento inicial).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
