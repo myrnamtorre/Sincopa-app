@@ -172,7 +172,8 @@ def analizar_audio_primeros_30s(url):
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
 
-    if len(beats) < 6 or spec_flatness > 0.035 or zcr > 0.08:
+    # Umbrales permisivos para evitar falsos positivos en música real
+    if len(beats) < 2 or spec_flatness > 0.10 or zcr > 0.18:
       return {
           "es_musica": False,
           "cancion_formateada": nombre_visual,
