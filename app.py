@@ -169,7 +169,7 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # ANÁLISIS ACÚSTICO BLINDADO
+    # ANÁLISIS ACÚSTICO ESTRICTO PARA CONTENIDO HABLADO
     zcr = np.mean(librosa.feature.zero_crossing_rate(y))
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     rms = np.mean(librosa.feature.rms(y=y))
@@ -187,11 +187,11 @@ def analizar_audio_para_modelo(url):
     harmonic_energy = np.mean(y_harmonic)
 
     if (
-        flatness > 0.05
-        or zcr > 0.10
-        or rms < 0.025
-        or num_beats < 15
-        or (percussive_energy / (harmonic_energy + 1e-5) < 0.15)
+        flatness > 0.035
+        or zcr > 0.075
+        or rms < 0.03
+        or num_beats < 20
+        or (percussive_energy / (harmonic_energy + 1e-5) < 0.25)
     ):
       return {
           "cancion_formateada": nombre_visual,
