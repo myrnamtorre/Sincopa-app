@@ -21,30 +21,38 @@ st.markdown(
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. ENTRENAMIENTO DINÁMICO (FEATURES REALES)
+# 2. ENTRENAMIENTO ROBUSTO (SIN CLASE PODCAST Falsa)
 # ==========================================
 @st.cache_resource
 def cargar_modelo_en_memoria():
+    # Entrenamos con un espacio vectorial amplio para cada género coreográfico real
     X_train = np.array([
-        [175.0, 0.25, 0.08, 0.010, 1.8, -100, 120],
-        [180.0, 0.28, 0.09, 0.015, 1.9, -90,  115],
+        # Bachata (Tempos moderados, energía rítmica constante)
         [125.0, 0.18, 0.06, 0.005, 1.5, -150, 140],
         [130.0, 0.20, 0.07, 0.006, 1.6, -140, 135],
+        [128.0, 0.19, 0.065, 0.0055, 1.55, -145, 138],
+        
+        # Quebradita (Tempos muy altos, alta energía)
+        [175.0, 0.25, 0.08, 0.010, 1.8, -100, 120],
+        [180.0, 0.28, 0.09, 0.015, 1.9, -90,  115],
+        [178.0, 0.26, 0.085, 0.012, 1.85, -95,  118],
+        
+        # Salsa (Ritmo dinámico, percusión marcada)
         [160.0, 0.22, 0.07, 0.008, 1.7, -120, 130],
         [165.0, 0.24, 0.08, 0.009, 1.8, -110, 125],
+        [162.0, 0.23, 0.075, 0.0085, 1.75, -115, 128],
+        
+        # Timba (Polirritmia y alta densidad de percusión)
         [105.0, 0.26, 0.06, 0.007, 1.9, -115, 110],
         [110.0, 0.27, 0.07, 0.008, 2.0, -105, 105],
-        [110.0, 0.05, 0.15, 0.050, 0.5, -250, 80],
-        [150.0, 0.08, 0.18, 0.060, 0.6, -230, 75],
-        [90.0,  0.04, 0.12, 0.040, 0.4, -260, 85]
+        [108.0, 0.265, 0.065, 0.0075, 1.95, -110, 108]
     ])
     
     y_train = np.array([
-        "Quebradita", "Quebradita", 
-        "Bachata", "Bachata", 
-        "Salsa", "Salsa", 
-        "Timba", "Timba", 
-        "Podcast", "Podcast", "Podcast"
+        "Bachata", "Bachata", "Bachata",
+        "Quebradita", "Quebradita", "Quebradita",
+        "Salsa", "Salsa", "Salsa",
+        "Timba", "Timba", "Timba"
     ])
 
     modelo_optimo = RandomForestClassifier(n_estimators=300, max_depth=12, random_state=42, class_weight="balanced")
@@ -54,7 +62,7 @@ def cargar_modelo_en_memoria():
 modelo = cargar_modelo_en_memoria()
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Clasificación Inteligente.**\nPega el enlace o sube un archivo de audio para analizar su matriz acústica pura."}]
+    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Clasificación Inteligente.**\nPega el enlace o sube un archivo de audio para evaluar el género coreográfico."}]
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
@@ -63,7 +71,7 @@ def es_url_valida(texto):
     return any(d in texto.strip().lower() for d in dominios) and texto.startswith("http")
 
 # ==========================================
-# 3. EXTRACCIÓN ACÚSTICA (NÚCLEO MATEMÁTICO)
+# 3. EXTRACCIÓN ACÚSTICA
 # ==========================================
 def extraer_features_librosa(y, sr, titulo_pista):
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
@@ -98,7 +106,6 @@ def analizar_audio_por_enlace(url):
         "quiet": True,
         "nocheckcertificate": True,
         "noplaylist": True,
-        # Forzamos cliente Android para evadir el Captcha de YouTube
         "extractor_args": {"youtube": {"player_client": ["android"]}}
     }
 
@@ -146,35 +153,28 @@ CATALOGO_ENTRENAMIENTO = {
     "Timba": "🔥 **Bloque Polirritmia:** Sentadillas sumo con toque. Planchas tocando hombros."
 }
 
-# --- PANEL LATERAL DE EMERGENCIA PARA EL ENTREGABLE ---
+# --- PANEL LATERAL DE EMERGENCIA ---
 with st.sidebar:
     st.markdown("### 🚨 Plan B (Evadir YouTube)")
-    st.markdown("Si la nube bloquea los enlaces, sube el MP3 directamente para generar la evaluación de inmediato.")
-    archivo_usuario = st.file_uploader("Cargar pista (MP3/WAV)", type=["mp3", "wav"])
-    if archivo_usuario:
-        st.session_state.messages.append({"role": "user", "content": f"📁 Archivo subido: {archivo_usuario.name}"})
+    st.markdown("Sube tu archivo MP3/WAV directamente para clasificarlo al instante sin bloqueos de red.")
+    archivo_usuario = st.file_uploader("Cargar pista de audio", type=["mp3", "wav"])
 
 st.markdown('<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>', unsafe_allow_html=True)
 tabs = st.tabs(["💬 Chat Asistente", "📊 Historial", "⚙️ Modelo"])
 
 def procesar_y_responder(resultado):
     if "error" in resultado:
-        error_msg = f"❌ **Error al procesar:** {resultado['error']}\n\n*Si YouTube te bloqueó por bot, usa el panel lateral para subir el archivo directamente.*"
+        error_msg = f"❌ **Error al procesar:** {resultado['error']}\n\n*Usa el panel lateral para subir el archivo directamente.*"
         st.error(error_msg)
         st.session_state.messages.append({"role": "assistant", "content": error_msg})
     else:
         X_input = np.array([resultado["features"]])
         prediccion = modelo.predict(X_input)[0]
 
-        if prediccion == "Podcast":
-            reply = f"⚠️ **Audio Rechazado (Contenido No Musical)**\n🎵 *{resultado['cancion_formateada']}*\n\nEl clasificador detectó firmas acústicas de voz o ruido hablado. Evaluación cancelada."
-            st.markdown(reply)
-            st.session_state.messages.append({"role": "assistant", "content": reply})
-        else:
-            par, grp, sol, metrica, aprovechamiento, _ = obtener_detalles_coreograficos(prediccion)
-            rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
-            
-            reply = f"""🎵 **Pista:** **{resultado['cancion_formateada']}**
+        par, grp, sol, metrica, aprovechamiento, _ = obtener_detalles_coreograficos(prediccion)
+        rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
+        
+        reply = f"""🎵 **Pista:** **{resultado['cancion_formateada']}**
 🏷️ **Clasificación del Modelo:** **{prediccion}** 
 ⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
 
@@ -191,30 +191,29 @@ def procesar_y_responder(resultado):
 ---
 {rutina}
 """
-            st.markdown(reply)
-            st.session_state.messages.append({"role": "assistant", "content": reply})
-            st.session_state.historial_evaluaciones.append({"Canción": resultado['cancion_formateada'], "Género": prediccion, "Tempo": resultado['tempo']})
+        st.markdown(reply)
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+        st.session_state.historial_evaluaciones.append({"Canción": resultado['cancion_formateada'], "Género": prediccion, "Tempo": resultado['tempo']})
 
 with tabs[0]:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    # Disparador por enlace
     if prompt := st.chat_input("Pega el enlace de la pista a evaluar..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+        with tabs[0]:
+            with st.chat_message("user"): st.markdown(prompt)
 
-        if es_url_valida(prompt):
-            with st.chat_message("assistant"):
-                with st.spinner("🎧 Descargando audio y procesando matriz acústica..."):
-                    res = analizar_audio_por_enlace(prompt)
-                procesar_y_responder(res)
-        else:
-            with st.chat_message("assistant"):
-                st.markdown("💡 Por favor, ingresa un enlace válido.")
-                st.session_state.messages.append({"role": "assistant", "content": "💡 Por favor, ingresa un enlace válido."})
+            if es_url_valida(prompt):
+                with st.chat_message("assistant"):
+                    with st.spinner("🎧 Descargando audio y procesando matriz acústica..."):
+                        res = analizar_audio_por_enlace(prompt)
+                    procesar_y_responder(res)
+            else:
+                with st.chat_message("assistant"):
+                    st.markdown("💡 Por favor, ingresa un enlace válido.")
+                    st.session_state.messages.append({"role": "assistant", "content": "💡 Por favor, ingresa un enlace válido."})
     
-    # Disparador por archivo subido (Plan B)
     if archivo_usuario:
         with st.chat_message("assistant"):
             with st.spinner("🎧 Procesando matriz acústica desde archivo local..."):
@@ -226,4 +225,4 @@ with tabs[1]:
         st.dataframe(pd.DataFrame(st.session_state.historial_evaluaciones), use_container_width=True)
 
 with tabs[2]:
-    st.json({"Algoritmo": "RandomForestClassifier", "Features": ["tempo", "rmse", "zcr", "flatness", "beat_strength", "mfcc1", "mfcc2"]})
+    st.json({"Algoritmo": "RandomForestClassifier", "Features": ["tempo", "rmse", "zcr", "flatness", "beat_strength", "mfcc1", "mfcc2"], "Clases": list(modelo.classes_)})
