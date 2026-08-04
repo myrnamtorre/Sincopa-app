@@ -30,41 +30,22 @@ st.markdown(
 )
 
 # ==========================================
-# 2. ENTRENAMIENTO DINÁMICO EN MEMORIA (ML PURO)
+# 2. ENTRENAMIENTO DINÁMICO ROBUSTO (ML PURO)
 # ==========================================
 
 
 @st.cache_resource
 def cargar_modelo_en_memoria():
+  # Vector de características: [tempo, danceability, energy, valence, speechiness, acousticness, densidad_tatum, num_secciones, num_compases, num_tiempos_beats]
   X_train = np.array([
       [178.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
       [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata
       [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
       [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
-      [
-          150.0,
-          0.15,
-          0.30,
-          0.40,
-          0.85,
-          0.80,
-          0.8,
-          2,
-          5,
-          12,
-      ],  # Charlas / Entrevistas / Voces falsas
-      [
-          90.0,
-          0.01,
-          0.02,
-          0.05,
-          0.98,
-          0.95,
-          0.1,
-          1,
-          1,
-          3,
-      ],  # Contenido hablado / No musical
+      # Patrones estrictos de voz / charla / podcast para el RandomForest
+      [150.0, 0.05, 0.10, 0.20, 0.95, 0.90, 0.4, 1, 2, 8],
+      [110.0, 0.02, 0.05, 0.10, 0.99, 0.95, 0.2, 1, 1, 4],
+      [90.0, 0.01, 0.02, 0.05, 0.98, 0.98, 0.1, 1, 1, 2],
   ])
   y_train = np.array([
       "Quebradita",
@@ -73,12 +54,13 @@ def cargar_modelo_en_memoria():
       "Timba",
       "No Musical / Contenido Hablado",
       "No Musical / Contenido Hablado",
+      "No Musical / Contenido Hablado",
   ])
 
   modelo_optimo = RandomForestClassifier(
-      n_estimators=300,
-      max_depth=12,
-      min_samples_split=3,
+      n_estimators=400,
+      max_depth=10,
+      min_samples_split=2,
       random_state=42,
       class_weight="balanced",
   )
@@ -169,10 +151,10 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # ANÁLISIS ACÚSTICO ESTRICTO PARA CONTENIDO HABLADO
-    zcr = np.mean(librosa.feature.zero_crossing_rate(y))
-    flatness = np.mean(librosa.feature.spectral_flatness(y=y))
-    rms = np.mean(librosa.feature.rms(y=y))
+    # EXTRACCIÓN DE CARACTERÍSTICAS ACÚSTICAS REALES
+    zcr = float(np.mean(librosa.feature.zero_crossing_rate(y)))
+    flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)))
+    rms = float(np.mean(librosa.feature.rms(y=y)))
 
     y_harmonic, y_percussive = librosa.effects.hpss(y)
     onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
@@ -182,63 +164,22 @@ def analizar_audio_para_modelo(url):
       tempo_val *= 2
 
     num_beats = len(beats)
+    percussive_energy = float(np.mean(y_percussive))
+    harmonic_energy = float(np.mean(y_harmonic))
 
-    percussive_energy = np.mean(y_percussive)
-    harmonic_energy = np.mean(y_harmonic)
-
-    if (
-        flatness > 0.035
-        or zcr > 0.075
-        or rms < 0.03
-        or num_beats < 20
-        or (percussive_energy / (harmonic_energy + 1e-5) < 0.25)
-    ):
-      return {
-          "cancion_formateada": nombre_visual,
-          "tempo": 90.0,
-          "danceability": 0.01,
-          "energy": 0.02,
-          "valence": 0.05,
-          "speechiness": 0.98,
-          "acousticness": 0.95,
-          "densidad_tatum": 0.1,
-          "num_secciones": 1,
-          "num_compases": 1,
-          "num_tiempos_beats": 2,
-      }
+    # Cálculo métricas secundarias para el modelo
+    speechiness = min(max(flatness * 12.0 + zcr * 3.0, 0.02), 0.98)
+    acousticness = min(max(1.0 - (percussive_energy / (harmonic_energy + 1e-5)), 0.05), 0.95)
+    densidad_tatum = round(float(num_beats / 30.0), 2)
 
     if tempo_val >= 165.0:
-      danceability, energy, valence, acousticness, densidad = (
-          0.89,
-          0.92,
-          0.86,
-          0.12,
-          4.3,
-      )
+      danceability, energy, valence = 0.89, 0.92, 0.86
     elif 135.0 <= tempo_val < 165.0:
-      danceability, energy, valence, acousticness, densidad = (
-          0.83,
-          0.86,
-          0.81,
-          0.19,
-          3.6,
-      )
+      danceability, energy, valence = 0.83, 0.86, 0.81
     elif 115.0 <= tempo_val < 135.0:
-      danceability, energy, valence, acousticness, densidad = (
-          0.76,
-          0.64,
-          0.71,
-          0.34,
-          2.8,
-      )
+      danceability, energy, valence = 0.76, 0.64, 0.71
     else:
-      danceability, energy, valence, acousticness, densidad = (
-          0.82,
-          0.85,
-          0.80,
-          0.20,
-          3.5,
-      )
+      danceability, energy, valence = 0.82, 0.85, 0.80
 
     return {
         "cancion_formateada": nombre_visual,
@@ -246,9 +187,9 @@ def analizar_audio_para_modelo(url):
         "danceability": danceability,
         "energy": energy,
         "valence": valence,
-        "speechiness": 0.05,
-        "acousticness": acousticness,
-        "densidad_tatum": densidad,
+        "speechiness": round(speechiness, 2),
+        "acousticness": round(acousticness, 2),
+        "densidad_tatum": densidad_tatum,
         "num_secciones": int(np.random.randint(4, 8)),
         "num_compases": int(np.random.randint(16, 64)),
         "num_tiempos_beats": max(num_beats, 32),
@@ -469,7 +410,7 @@ with tabs[2]:
   st.success("✨ El modelo RandomForest se encuentra activo en memoria.")
   st.json({
       "Algoritmo": "RandomForestClassifier",
-      "Estimadores": 300,
+      "Estimadores": 400,
       "Clases Soportadas": list(modelo.classes_),
   })
 
@@ -494,9 +435,9 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
         if "No Musical" in prediccion_ml:
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
-              f" *{features_extraidas['cancion_formateada']}*\n\n*(El análisis"
-              " acústico avanzado determinó que la señal corresponde a voz,"
-              " charla o contenido hablado sin estructura rítmica bailable).* "
+              f" *{features_extraidas['cancion_formateada']}*\n\n*(El modelo"
+              " determinó mediante inferencia matemática que la señal"
+              " corresponde a voz, charla o contenido hablado).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
