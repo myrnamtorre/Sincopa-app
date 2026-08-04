@@ -42,6 +42,18 @@ def cargar_modelo_en_memoria():
       [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
       [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
       [
+          150.0,
+          0.15,
+          0.30,
+          0.40,
+          0.85,
+          0.80,
+          0.8,
+          2,
+          5,
+          12,
+      ],  # Charlas / Entrevistas / Voces falsas
+      [
           90.0,
           0.01,
           0.02,
@@ -59,6 +71,7 @@ def cargar_modelo_en_memoria():
       "Bachata",
       "Salsa",
       "Timba",
+      "No Musical / Contenido Hablado",
       "No Musical / Contenido Hablado",
   ])
 
@@ -133,7 +146,7 @@ def analizar_audio_para_modelo(url):
   nombre_visual = obtener_titulo_desde_link(url)
   texto_analisis = nombre_visual.lower()
 
-  # 1. Filtro rápido por palabras clave en el título
+  # 1. Filtro por palabras clave extendido (incluye entrevistas, shows, polémicas, etc.)
   palabras_habladas = [
       "podcast",
       "relatos",
@@ -156,6 +169,13 @@ def analizar_audio_para_modelo(url):
       "conferencia",
       "curso",
       "speech",
+      "rival",
+      "menso",
+      "pepe",
+      "teo",
+      "corte",
+      "chismes",
+      "opinión",
   ]
   if any(p in texto_analisis for p in palabras_habladas):
     return {
@@ -196,8 +216,7 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # 2. ANÁLISIS ACÚSTICO ESTRICTO DE LA SEÑAL REAL
-    # Medimos la planitud espectral y la tasa de cruces por cero de la voz vs música
+    # 2. ANÁLISIS ACÚSTICO BLINDADO
     zcr = np.mean(librosa.feature.zero_crossing_rate(y))
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     rms = np.mean(librosa.feature.rms(y=y))
@@ -211,8 +230,17 @@ def analizar_audio_para_modelo(url):
 
     num_beats = len(beats)
 
-    # Si la señal muestra características físicas de voz hablada o audio no rítmico, lo bloqueamos aquí
-    if flatness > 0.08 or zcr > 0.12 or rms < 0.03 or num_beats < 10:
+    # Si la energía percusiva es baja o la señal es predominantemente plana/hablada, fuera música
+    percussive_energy = np.mean(y_percussive)
+    harmonic_energy = np.mean(y_harmonic)
+
+    if (
+        flatness > 0.05
+        or zcr > 0.10
+        or rms < 0.025
+        or num_beats < 15
+        or (percussive_energy / (harmonic_energy + 1e-5) < 0.15)
+    ):
       return {
           "cancion_formateada": nombre_visual,
           "tempo": 90.0,
@@ -515,8 +543,8 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
               f" *{features_extraidas['cancion_formateada']}*\n\n*(El análisis"
-              " acústico de la señal determinó que el audio no contiene una base"
-              " rítmica bailable).* "
+              " acústico avanzado determinó que la señal corresponde a voz,"
+              " charla o contenido hablado sin estructura rítmica bailable).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
