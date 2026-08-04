@@ -150,17 +150,16 @@ def analizar_audio_con_hpss(url):
       os.remove(archivo_final)
 
     # SEPARACIÓN ARMÓNICO-PERCUSIVA (HPSS)
-    # Esto aísla por completo la percusión real de la voz/armónicos
     y_harmonic, y_percussive = librosa.effects.hpss(y)
 
-    # Energía de la percusión frente a la armónica
+    # Energía percusiva vs armónica (con variables sintácticamente correctas)
     energia_percusiva = np.sum(y_percussive**2)
-    energia_ harmonica = np.sum(y_harmonic**2)
-    proporcion_percubase = (
-        energia_percusiva / (energia_ harmonica + energia_percusiva + 1e-6)
+    energia_harmonica = np.sum(y_harmonic**2)
+    proporcion_percubase = energia_percusiva / (
+        energia_harmonica + energia_percusiva + 1e-6
     )
 
-    # Si la energía percusiva es extremadamente baja, es charla/voz y se rechaza de inmediato
+    # Si la proporción percusiva es muy baja, se trata de voz/habla y se descarta
     if proporcion_percubase < 0.035:
       return {
           "cancion_formateada": nombre_visual,
@@ -177,7 +176,7 @@ def analizar_audio_con_hpss(url):
           "forzar_no_musical": True,
       }
 
-    # Si pasa el filtro percusivo, procedemos a calcular el tempo real sobre la pista percusiva limpia
+    # Análisis de ritmo sobre la pista percusiva limpia
     onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
