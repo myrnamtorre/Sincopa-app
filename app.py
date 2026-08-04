@@ -38,24 +38,12 @@ st.markdown(
 
 @st.cache_resource
 def cargar_modelo_en_memoria():
-  # Dataset de entrenamiento robusto con separación estricta de voz y géneros bailables
   X_train = np.array([
       [178.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
       [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata
       [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
       [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
-      [
-          110.0,
-          0.05,
-          0.05,
-          0.20,
-          0.95,
-          0.85,
-          0.5,
-          2,
-          4,
-          10,
-      ],  # Contenido Hablado / Voz Pura (Alta speechiness, baja energía)
+      [110.0, 0.05, 0.05, 0.20, 0.95, 0.85, 0.5, 2, 4, 10],  # Voz Pura
   ])
   y_train = np.array([
       "Quebradita",
@@ -161,7 +149,7 @@ def analizar_audio_primeros_30s(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extracción de características acústicas con Librosa
+    # Extracción acústica pura con Librosa
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
@@ -169,9 +157,10 @@ def analizar_audio_primeros_30s(url):
       tempo_val *= 2
 
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
+    num_beats = len(beats)
 
-    # Detección estricta de contenido hablado basada en características espectrales puras
-    if spec_flatness > 0.08 or len(beats) < 15:
+    # Detección de voz o contenido hablado puro
+    if spec_flatness > 0.08 or num_beats < 18:
       return {
           "cancion_formateada": nombre_visual,
           "tempo": round(tempo_val, 1),
@@ -183,10 +172,10 @@ def analizar_audio_primeros_30s(url):
           "densidad_tatum": 0.5,
           "num_secciones": 2,
           "num_compases": 4,
-          "num_tiempos_beats": max(int(len(beats)), 5),
+          "num_tiempos_beats": max(num_beats, 5),
       }
 
-    # Asignación para pistas musicales reales
+    # Descriptores para pistas musicales reales
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -231,7 +220,7 @@ def analizar_audio_primeros_30s(url):
         "densidad_tatum": densidad,
         "num_secciones": int(np.random.randint(4, 8)),
         "num_compases": int(np.random.randint(16, 64)),
-        "num_tiempos_beats": max(int(len(beats)), 32),
+        "num_tiempos_beats": max(num_beats, 32),
     }
 
   except Exception as e:
