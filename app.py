@@ -3,8 +3,6 @@ import tempfile
 import librosa
 import numpy as np
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
 from sklearn.ensemble import RandomForestClassifier
 import streamlit as st
 import yt_dlp
@@ -56,42 +54,18 @@ def cargar_modelo_en_memoria():
 modelo = cargar_modelo_en_memoria()
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Clasificación Inteligente.**\nPega cualquier enlace de **YouTube, Spotify, Apple Music o SoundCloud** en el chat para analizar su matriz acústica."}]
+    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Clasificación Inteligente.**\nPega cualquier enlace de música en el chat para analizar su matriz acústica."}]
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
-# ==========================================
-# 3. MANEJO Y VALIDACIÓN DE ENLACES
-# ==========================================
 def es_url_valida(texto):
     dominios = ["youtube.com", "youtu.be", "soundcloud.com", "spotify.com", "apple.com"]
     return any(d in texto.strip().lower() for d in dominios) and texto.startswith("http")
 
-@st.cache_data(ttl=3600)
-def extraer_titulo_multiplataforma(url):
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        if "youtube.com" in url or "youtu.be" in url:
-            res = requests.get(f"https://www.youtube.com/oembed?url={url}&format=json", timeout=3)
-            if res.status_code == 200: return res.json().get("title", "Audio de YouTube")
-        elif "spotify.com" in url:
-            res = requests.get(f"https://open.spotify.com/oembed?url={url}", timeout=3)
-            if res.status_code == 200: return res.json().get("title", "Audio de Spotify")
-        
-        res = requests.get(url, headers=headers, timeout=4)
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, "html.parser")
-            if soup.title and soup.title.string:
-                return soup.title.string.strip().replace(" | Spotify", "").replace(" en Apple Music", "").replace(" - song and lyrics by", "")
-    except: 
-        pass
-    return url
-
 # ==========================================
-# 4. EXTRACCIÓN Y PROCESAMIENTO ACÚSTICO
+# 3. EXTRACCIÓN Y PROCESAMIENTO DIRECTO
 # ==========================================
 def analizar_audio_por_enlace(url):
-    titulo_pista = extraer_titulo_multiplataforma(url)
     fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
     os.close(fd)
     
@@ -101,17 +75,18 @@ def analizar_audio_por_enlace(url):
         "outtmpl": ruta_salida.replace(".mp3", ""),
         "quiet": True,
         "nocheckcertificate": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
-        "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        "default_search": "auto", 
+        "noplaylist": True,
+        "extractor_args": {"youtube": {"player_client": ["android", "web"]}}
     }
-
-    # BÚSQUEDA ROBUSTA: Si es Spotify/Apple/SoundCloud o un link directo, 
-    # usamos el título extraído para buscar el stream de audio libremente en la red de manera segura.
-    objetivo_descarga = f"ytsearch1:{titulo_pista} audio" if ("spotify.com" in url or "apple.com" in url or "soundcloud.com" in url) else url
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([objetivo_descarga])
+            info = ydl.extract_info(url, download=True)
+            # Extraemos el título real del archivo descargado directamente
+            if 'entries' in info:
+                info = info['entries'][0]
+            titulo_pista = info.get('title', 'Pista Analizada')
         
         archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
         y, sr = librosa.load(archivo_final, duration=45.0, sr=22050)
@@ -119,7 +94,6 @@ def analizar_audio_por_enlace(url):
         if os.path.exists(archivo_final): 
             os.remove(archivo_final)
 
-        # Extracción de características (Features)
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
         tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
         
@@ -145,7 +119,7 @@ def analizar_audio_por_enlace(url):
         return {"error": str(e)}
 
 # ==========================================
-# 5. LÓGICA DE UI Y RESPUESTAS
+# 4. LÓGICA DE UI Y RESPUESTAS
 # ==========================================
 def obtener_detalles_coreograficos(genero):
     datos = {
@@ -157,7 +131,7 @@ def obtener_detalles_coreograficos(genero):
     return datos.get(genero, (0,0,0,"","",""))
 
 CATALOGO_ENTRENAMIENTO = {
-    "Quebradita": "🔥 **Bloque HIIT:** Tabata (20s/10s) Jump Squats y Burpees. Fortalecimiento de gemelos.",
+    "Quebradita": "🔥 **Bloque HIIT:** Tabata (20s/10s) Jump Squats y Burpees.",
     "Bachata": "🔥 **Bloque Core:** Tabata Planchas con rotación. Puente de glúteos unilateral.",
     "Salsa": "🔥 **Bloque Agilidad:** 5x45s skipping alto. Desplantes dinámicos alternados.",
     "Timba": "🔥 **Bloque Polirritmia:** Sentadillas sumo con toque. Planchas tocando hombros."
@@ -177,24 +151,24 @@ with tabs[1]:
 with tabs[2]:
     st.json({"Algoritmo": "RandomForestClassifier", "Features": ["tempo", "rmse", "zcr", "flatness", "beat_strength", "mfcc1", "mfcc2"]})
 
-if prompt := st.chat_input("Pega un enlace de YouTube, Spotify, Apple Music o SoundCloud..."):
+if prompt := st.chat_input("Pega el enlace de la pista a evaluar..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with tabs[0]:
         with st.chat_message("user"): st.markdown(prompt)
 
         if es_url_valida(prompt):
             with st.chat_message("assistant"):
-                with st.spinner("🎧 Conectando a plataforma, extrayendo metadatos y procesando matriz acústica..."):
+                with st.spinner("🎧 Descargando audio y procesando matriz acústica..."):
                     resultado = analizar_audio_por_enlace(prompt)
                 
                 if "error" in resultado:
-                    st.error(f"No se pudo procesar el enlace: {resultado['error']}")
+                    st.error(f"❌ **Enlace no disponible o bloqueado:** {resultado['error']}\n\n*Por favor, intenta con otro link de la misma canción que sea 100% público.*")
                 else:
                     X_input = np.array([resultado["features"]])
                     prediccion = modelo.predict(X_input)[0]
 
                     if prediccion == "Podcast":
-                        reply = f"⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:** *{resultado['cancion_formateada']}*\n\n*(El clasificador identificó firmas acústicas de voz hablada).* "
+                        reply = f"⚠️ **Audio Rechazado (Contenido No Musical)**\n🎵 *{resultado['cancion_formateada']}*\n\nEl sistema detectó un archivo de voz/podcast. No se realizará la evaluación coreográfica."
                         st.markdown(reply)
                         st.session_state.messages.append({"role": "assistant", "content": reply})
                     else:
@@ -204,7 +178,6 @@ if prompt := st.chat_input("Pega un enlace de YouTube, Spotify, Apple Music o So
                         reply = f"""🎵 **Pista:** **{resultado['cancion_formateada']}**
 🏷️ **Clasificación del Modelo:** **{prediccion}** 
 ⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
-📊 **Fuerza de Pulso:** {resultado['densidad_tatum']}
 
 ---
 ### 🎼 Marcación Coreográfica:
@@ -224,6 +197,6 @@ if prompt := st.chat_input("Pega un enlace de YouTube, Spotify, Apple Music o So
                         st.session_state.historial_evaluaciones.append({"Canción": resultado['cancion_formateada'], "Género": prediccion, "Tempo": resultado['tempo']})
         else:
             with st.chat_message("assistant"):
-                reply = "💡 Por favor, ingresa un enlace válido que comience con `http` proveniente de YouTube, Spotify, Apple Music o SoundCloud."
+                reply = "💡 Por favor, ingresa un enlace válido."
                 st.markdown(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
