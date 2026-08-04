@@ -161,12 +161,20 @@ def analizar_audio_para_modelo(url):
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
 
     # Corrección matemática de octava/sub-tempo de librosa
-    # Si detecta un tempo en rango lento-medio pero la densidad de onsets es alta, es un tema rápido mal medido.
     if tempo_val < 135:
-      # Analizamos la densidad real de picos de percusión por segundo
-      picos_persecusion = len(librosa.util.peak_pick(onset_env, pre_max=3, post_max=3, pre_avg=3, post_avg=3, delta=0.5, wait=10))
-      if picos_persecusion > 45:  (pistas densas/rápidas)
-        tempo_val *= 1.5  # Corrección de subestimación de beat tracking
+      picos_persecusion = len(
+          librosa.util.peak_pick(
+              onset_env,
+              pre_max=3,
+              post_max=3,
+              pre_avg=3,
+              post_avg=3,
+              delta=0.5,
+              wait=10,
+          )
+      )
+      if picos_persecusion > 45:  # pistas densas/rápidas
+        tempo_val *= 1.5
 
     if tempo_val < 60:
       tempo_val *= 2
@@ -175,7 +183,7 @@ def analizar_audio_para_modelo(url):
     percussive_energy = np.mean(y_percussive)
     harmonic_energy = np.mean(y_harmonic)
 
-    # Filtro acústico puro para contenido hablado (sin depender de palabras en texto)
+    # Filtro acústico puro para contenido hablado
     if (
         flatness > 0.05
         and zcr > 0.08
@@ -195,7 +203,7 @@ def analizar_audio_para_modelo(url):
           "num_tiempos_beats": 2,
       }
 
-    # Mapeo matemático según rangos de tempo reales corregidos
+    # Mapeo matemático según rangos de tempo
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.85,
