@@ -3,6 +3,8 @@ import tempfile
 import librosa
 import numpy as np
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 from sklearn.ensemble import RandomForestClassifier
 import streamlit as st
 import yt_dlp
@@ -54,37 +56,54 @@ def cargar_modelo_en_memoria():
 modelo = cargar_modelo_en_memoria()
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Asistente Coreográfico.**\nPega cualquier enlace de YouTube en el chat para analizar su matriz acústica y generar la evaluación instantánea."}]
+    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Asistente Coreográfico.**\nPega cualquier enlace o título de música en el chat para analizar su matriz acústica y generar la evaluación instantánea."}]
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
-def es_url_valida(texto):
-    dominios = ["youtube.com", "youtu.be"]
-    return any(d in texto.strip().lower() for d in dominios) and texto.startswith("http")
+# ==========================================
+# 3. EXTRACCIÓN Y BÚSQUEDA UNIVERSAL
+# ==========================================
+@st.cache_data(ttl=3600)
+def obtener_titulo_web(url):
+    try:
+        if "youtube.com" in url or "youtu.be" in url:
+            res = requests.get(f"https://www.youtube.com/oembed?url={url}&format=json", timeout=3)
+            if res.status_code == 200: return res.json().get("title", url)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers, timeout=3)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            if soup.title and soup.title.string:
+                return soup.title.string.strip()
+    except:
+        pass
+    return url
 
-# ==========================================
-# 3. PROCESAMIENTO DE ENLACES
-# ==========================================
-def analizar_audio_por_enlace(url):
+def analizar_audio_universal(entrada):
     fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
     os.close(fd)
     
+    # Si es un enlace, intentamos obtener su título real para buscarlo de forma limpia
+    if entrada.startswith("http"):
+        nombre_pista = obtener_titulo_web(entrada)
+        # Búsqueda abierta por texto para evitar bloqueos directos de ID o firewalls de nube
+        query_busqueda = f"ytsearch1:{nombre_pista} audio"
+    else:
+        nombre_pista = entrada
+        query_busqueda = f"ytsearch1:{entrada} audio"
+
     ydl_opts = {
         "format": "bestaudio/best",
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
         "outtmpl": ruta_salida.replace(".mp3", ""),
         "quiet": True,
         "nocheckcertificate": True,
-        "noplaylist": True,
         "extractor_args": {"youtube": {"player_client": ["android", "web"]}}
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            if 'entries' in info:
-                info = info['entries'][0]
-            titulo_pista = info.get('title', 'Pista de YouTube')
+            ydl.download([query_busqueda])
         
         archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
         y, sr = librosa.load(archivo_final, duration=45.0, sr=22050)
@@ -107,7 +126,7 @@ def analizar_audio_por_enlace(url):
         mfcc2 = float(np.mean(mfccs[1]))
 
         return {
-            "cancion_formateada": titulo_pista,
+            "cancion_formateada": nombre_pista,
             "features": [tempo_val, rmse, zcr, flatness, beat_strength, mfcc1, mfcc2],
             "tempo": round(tempo_val, 1),
             "densidad_tatum": round(beat_strength * 2, 2)
@@ -141,27 +160,27 @@ with tabs[0]:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Pega el enlace de YouTube de la pista a evaluar..."):
+    if prompt := st.chat_input("Pega el enlace o nombre de la pista a evaluar..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with tabs[0]:
             with st.chat_message("user"): st.markdown(prompt)
 
-            if es_url_valida(prompt):
-                with st.chat_message("assistant"):
-                    with st.spinner("🎧 Conectando con YouTube y procesando matriz acústica..."):
-                        resultado = analizar_audio_por_enlace(prompt)
-                    
-                    if "error" in resultado:
-                        st.error(f"❌ Error al procesar el enlace: {resultado['error']}")
-                        st.session_state.messages.append({"role": "assistant", "content": f"❌ Error al procesar el enlace: {resultado['error']}"})
-                    else:
-                        X_input = np.array([resultado["features"]])
-                        prediccion = modelo.predict(X_input)[0]
+            with st.chat_message("assistant"):
+                with st.spinner("🎧 Procesando búsqueda y matriz acústica..."):
+                    resultado = analizar_audio_universal(prompt)
+                
+                if "error" in resultado:
+                    error_msg = f"❌ Error al procesar: {resultado['error']}"
+                    st.error(error_msg)
+                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                else:
+                    X_input = np.array([resultado["features"]])
+                    prediccion = modelo.predict(X_input)[0]
 
-                        par, grp, sol, metrica, aprovechamiento, _ = obtener_detalles_coreograficos(prediccion)
-                        rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
-                        
-                        reply = f"""🎵 **Pista:** **{resultado['cancion_formateada']}**
+                    par, grp, sol, metrica, aprovechamiento, _ = obtener_detalles_coreograficos(prediccion)
+                    rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
+                    
+                    reply = f"""🎵 **Pista:** **{resultado['cancion_formateada']}**
 🏷️ **Clasificación del Modelo:** **{prediccion}** 
 ⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
 
@@ -178,13 +197,9 @@ with tabs[0]:
 ---
 {rutina}
 """
-                        st.markdown(reply)
-                        st.session_state.messages.append({"role": "assistant", "content": reply})
-                        st.session_state.historial_evaluaciones.append({"Canción": resultado['cancion_formateada'], "Género": prediccion, "Tempo": resultado['tempo']})
-            else:
-                with st.chat_message("assistant"):
-                    st.markdown("💡 Por favor, ingresa un enlace válido de YouTube.")
-                    st.session_state.messages.append({"role": "assistant", "content": "💡 Por favor, ingresa un enlace válido de YouTube."})
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                    st.session_state.historial_evaluaciones.append({"Canción": resultado['cancion_formateada'], "Género": prediccion, "Tempo": resultado['tempo']})
 
 with tabs[1]:
     if st.session_state.historial_evaluaciones:
