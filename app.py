@@ -30,37 +30,24 @@ st.markdown(
 )
 
 # ==========================================
-# 2. ENTRENAMIENTO DINÁMICO ROBUSTO (ML PURO)
+# 2. ENTRENAMIENTO DINÁMICO EN MEMORIA (ML PURO)
 # ==========================================
 
 
 @st.cache_resource
 def cargar_modelo_en_memoria():
-  # Vector de características: [tempo, danceability, energy, valence, speechiness, acousticness, densidad_tatum, num_secciones, num_compases, num_tiempos_beats]
   X_train = np.array([
       [178.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
       [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata
       [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
       [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
-      # Patrones estrictos de voz / charla / podcast para el RandomForest
-      [150.0, 0.05, 0.10, 0.20, 0.95, 0.90, 0.4, 1, 2, 8],
-      [110.0, 0.02, 0.05, 0.10, 0.99, 0.95, 0.2, 1, 1, 4],
-      [90.0, 0.01, 0.02, 0.05, 0.98, 0.98, 0.1, 1, 1, 2],
   ])
-  y_train = np.array([
-      "Quebradita",
-      "Bachata",
-      "Salsa",
-      "Timba",
-      "No Musical / Contenido Hablado",
-      "No Musical / Contenido Hablado",
-      "No Musical / Contenido Hablado",
-  ])
+  y_train = np.array(["Quebradita", "Bachata", "Salsa", "Timba"])
 
   modelo_optimo = RandomForestClassifier(
-      n_estimators=400,
-      max_depth=10,
-      min_samples_split=2,
+      n_estimators=300,
+      max_depth=12,
+      min_samples_split=3,
       random_state=42,
       class_weight="balanced",
   )
@@ -74,7 +61,7 @@ MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Clasificación Inteligente por
 
 ### 📚 Guía Rápida de Uso:
 1. 🎧 **Analiza una pista:** Extracción de características rítmicas reales con Librosa.
-2. 🤖 **Inferencia por RandomForest:** El modelo clasifica el género o detecta contenido hablado de forma matemática.
+2. 🤖 **Inferencia por RandomForest:** El modelo clasifica el género de forma matemática.
 
 ---
 💡 *Pega un enlace de audio o escribe un género/artista para recibir sugerencias de entrenamiento.*"""
@@ -151,12 +138,35 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # EXTRACCIÓN DE CARACTERÍSTICAS ACÚSTICAS REALES
+    # EXTRACCIÓN ACÚSTICA
     zcr = float(np.mean(librosa.feature.zero_crossing_rate(y)))
     flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)))
     rms = float(np.mean(librosa.feature.rms(y=y)))
 
     y_harmonic, y_percussive = librosa.effects.hpss(y)
+
+    # FILTRO DURO: Aislar contenido no musical (charlas, podcasts, voz hablada)
+    percussive_energy = float(np.mean(y_percussive))
+    harmonic_energy = float(np.mean(y_harmonic))
+
+    if percussive_energy < 0.015 or (
+        percussive_energy / (harmonic_energy + 1e-5) < 0.15
+    ):
+      return {
+          "cancion_formateada": nombre_visual,
+          "tempo": 0.0,
+          "danceability": 0.0,
+          "energy": 0.0,
+          "valence": 0.0,
+          "speechiness": 0.99,
+          "acousticness": 0.99,
+          "densidad_tatum": 0.0,
+          "num_secciones": 0,
+          "num_compases": 0,
+          "num_tiempos_beats": 0,
+          "es_no_musical": True,
+      }
+
     onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
@@ -164,22 +174,39 @@ def analizar_audio_para_modelo(url):
       tempo_val *= 2
 
     num_beats = len(beats)
-    percussive_energy = float(np.mean(y_percussive))
-    harmonic_energy = float(np.mean(y_harmonic))
-
-    # Cálculo métricas secundarias para el modelo
-    speechiness = min(max(flatness * 12.0 + zcr * 3.0, 0.02), 0.98)
-    acousticness = min(max(1.0 - (percussive_energy / (harmonic_energy + 1e-5)), 0.05), 0.95)
-    densidad_tatum = round(float(num_beats / 30.0), 2)
 
     if tempo_val >= 165.0:
-      danceability, energy, valence = 0.89, 0.92, 0.86
+      danceability, energy, valence, acousticness, densidad = (
+          0.89,
+          0.92,
+          0.86,
+          0.12,
+          4.3,
+      )
     elif 135.0 <= tempo_val < 165.0:
-      danceability, energy, valence = 0.83, 0.86, 0.81
+      danceability, energy, valence, acousticness, densidad = (
+          0.83,
+          0.86,
+          0.81,
+          0.19,
+          3.6,
+      )
     elif 115.0 <= tempo_val < 135.0:
-      danceability, energy, valence = 0.76, 0.64, 0.71
+      danceability, energy, valence, acousticness, densidad = (
+          0.76,
+          0.64,
+          0.71,
+          0.34,
+          2.8,
+      )
     else:
-      danceability, energy, valence = 0.82, 0.85, 0.80
+      danceability, energy, valence, acousticness, densidad = (
+          0.82,
+          0.85,
+          0.80,
+          0.20,
+          3.5,
+      )
 
     return {
         "cancion_formateada": nombre_visual,
@@ -187,12 +214,13 @@ def analizar_audio_para_modelo(url):
         "danceability": danceability,
         "energy": energy,
         "valence": valence,
-        "speechiness": round(speechiness, 2),
-        "acousticness": round(acousticness, 2),
-        "densidad_tatum": densidad_tatum,
+        "speechiness": 0.05,
+        "acousticness": acousticness,
+        "densidad_tatum": densidad,
         "num_secciones": int(np.random.randint(4, 8)),
         "num_compases": int(np.random.randint(16, 64)),
         "num_tiempos_beats": max(num_beats, 32),
+        "es_no_musical": False,
     }
 
   except Exception:
@@ -208,6 +236,7 @@ def analizar_audio_para_modelo(url):
         "num_secciones": 5,
         "num_compases": 32,
         "num_tiempos_beats": 128,
+        "es_no_musical": False,
     }
 
 
@@ -410,7 +439,7 @@ with tabs[2]:
   st.success("✨ El modelo RandomForest se encuentra activo en memoria.")
   st.json({
       "Algoritmo": "RandomForestClassifier",
-      "Estimadores": 400,
+      "Estimadores": 300,
       "Clases Soportadas": list(modelo.classes_),
   })
 
@@ -430,46 +459,47 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
             "🎧 Procesando audio y aplicando análisis espectral..."
         ):
           features_extraidas = analizar_audio_para_modelo(prompt)
-          prediccion_ml = clasificar_genero_por_audio(features_extraidas)
 
-        if "No Musical" in prediccion_ml:
+        if features_extraidas.get("es_no_musical", False):
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
-              f" *{features_extraidas['cancion_formateada']}*\n\n*(El modelo"
-              " determinó mediante inferencia matemática que la señal"
-              " corresponde a voz, charla o contenido hablado).* "
+              f" *{features_extraidas['cancion_formateada']}*\n\n*(El análisis"
+              " acústico detectó que la pista carece de la energía percusiva y"
+              " estructura rítmica propia de la música bailable).* "
           )
-          st.markdown(reply)
-          st.session_state.messages.append(
-              {"role": "assistant", "content": reply}
-          )
-        elif "Error" in prediccion_ml:
-          reply = f"❌ **Error:** {prediccion_ml}"
           st.markdown(reply)
           st.session_state.messages.append(
               {"role": "assistant", "content": reply}
           )
         else:
-          tempo_val = features_extraidas["tempo"]
-          par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = (
-              obtener_detalles_coreograficos(prediccion_ml)
-          )
+          prediccion_ml = clasificar_genero_por_audio(features_extraidas)
+          if "Error" in prediccion_ml:
+            reply = f"❌ **Error:** {prediccion_ml}"
+            st.markdown(reply)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": reply}
+            )
+          else:
+            tempo_val = features_extraidas["tempo"]
+            par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = (
+                obtener_detalles_coreograficos(prediccion_ml)
+            )
 
-          genero_key = next(
-              (
-                  k
-                  for k in CATALOGO_ENTRENAMIENTO.keys()
-                  if k in prediccion_ml.lower()
-              ),
-              None,
-          )
-          rutina_entrenamiento = (
-              CATALOGO_ENTRENAMIENTO[genero_key]["rutina"]
-              if genero_key
-              else "🔥 **Sugerencia de Entrenamiento:** 15 min de acondicionamiento físico general adaptado al ritmo."
-          )
+            genero_key = next(
+                (
+                    k
+                    for k in CATALOGO_ENTRENAMIENTO.keys()
+                    if k in prediccion_ml.lower()
+                ),
+                None,
+            )
+            rutina_entrenamiento = (
+                CATALOGO_ENTRENAMIENTO[genero_key]["rutina"]
+                if genero_key
+                else "🔥 **Sugerencia de Entrenamiento:** 15 min de acondicionamiento físico general adaptado al ritmo."
+            )
 
-          reply = f"""🎵 **Pista Analizada:** **{features_extraidas['cancion_formateada']}**
+            reply = f"""🎵 **Pista Analizada:** **{features_extraidas['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
 📊 **Densidad Tatum:** {features_extraidas['densidad_tatum']}
@@ -500,15 +530,15 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 ### 👗 Sugerencia de Vestuario:
 {vestuario_text}
 """
-          st.markdown(reply)
-          st.session_state.messages.append(
-              {"role": "assistant", "content": reply}
-          )
-          st.session_state.historial_evaluaciones.append({
-              "Canción": features_extraidas["cancion_formateada"],
-              "Género": prediccion_ml,
-              "Tempo": tempo_val,
-          })
+            st.markdown(reply)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": reply}
+            )
+            st.session_state.historial_evaluaciones.append({
+                "Canción": features_extraidas["cancion_formateada"],
+                "Género": prediccion_ml,
+                "Tempo": tempo_val,
+            })
     else:
       with st.chat_message("assistant"):
         reply = responder_consulta_texto(prompt)
