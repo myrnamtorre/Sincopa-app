@@ -10,14 +10,9 @@ import streamlit as st
 import yt_dlp
 
 # ==========================================
-# 1. CONFIGURACIÓN INICIAL DE STREAMLIT
+# 1. CONFIGURACIÓN INICIAL
 # ==========================================
-st.set_page_config(
-    page_title="Síncopa - Asistente Coreográfico",
-    page_icon="💃",
-    layout="wide",
-)
-
+st.set_page_config(page_title="Síncopa - Asistente Coreográfico", page_icon="💃", layout="wide")
 st.markdown(
     """
     <style>
@@ -25,539 +20,195 @@ st.markdown(
     .sub-header { font-size: 1.1rem; color: #457B9D; text-align: center; margin-bottom: 1.5rem; }
     .stChatMessage { border-radius: 12px; }
     </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 # ==========================================
-# 2. ENTRENAMIENTO DINÁMICO EN MEMORIA (ML PURO)
+# 2. ENTRENAMIENTO DINÁMICO (FEATURES REALES)
 # ==========================================
-
-
 @st.cache_resource
 def cargar_modelo_en_memoria():
-  X_train = np.array([
-      [178.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
-      [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata
-      [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
-      [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
-  ])
-  y_train = np.array(["Quebradita", "Bachata", "Salsa", "Timba"])
+    # Features: [tempo, rmse, zcr, flatness, beat_strength, mfcc1, mfcc2]
+    # Se entrena con perfiles acústicos distintivos, incluyendo una clase específica para "Podcast"
+    X_train = np.array([
+        # Quebradita (Rápido, alta energía, metales fuertes)
+        [175.0, 0.25, 0.08, 0.010, 1.8, -100, 120],
+        [180.0, 0.28, 0.09, 0.015, 1.9, -90,  115],
+        # Bachata (Velocidad media, acústico, ataque percusivo claro)
+        [125.0, 0.18, 0.06, 0.005, 1.5, -150, 140],
+        [130.0, 0.20, 0.07, 0.006, 1.6, -140, 135],
+        # Salsa (Rápido, brillante, polirritmia densa)
+        [160.0, 0.22, 0.07, 0.008, 1.7, -120, 130],
+        [165.0, 0.24, 0.08, 0.009, 1.8, -110, 125],
+        # Timba (Más lento o doble tiempo, bajo pesado, percusión compleja)
+        [105.0, 0.26, 0.06, 0.007, 1.9, -115, 110],
+        [110.0, 0.27, 0.07, 0.008, 2.0, -105, 105],
+        # Podcast / Voz (ZCR alto por consonantes, RMS bajo/variable, fuerza de beat nula)
+        [110.0, 0.05, 0.15, 0.050, 0.5, -250, 80],
+        [150.0, 0.08, 0.18, 0.060, 0.6, -230, 75],
+        [90.0,  0.04, 0.12, 0.040, 0.4, -260, 85]
+    ])
+    
+    y_train = np.array([
+        "Quebradita", "Quebradita", 
+        "Bachata", "Bachata", 
+        "Salsa", "Salsa", 
+        "Timba", "Timba", 
+        "Podcast", "Podcast", "Podcast"
+    ])
 
-  modelo_optimo = RandomForestClassifier(
-      n_estimators=300,
-      max_depth=12,
-      min_samples_split=3,
-      random_state=42,
-      class_weight="balanced",
-  )
-  modelo_optimo.fit(X_train, y_train)
-  return modelo_optimo
-
+    modelo_optimo = RandomForestClassifier(n_estimators=300, max_depth=12, random_state=42, class_weight="balanced")
+    modelo_optimo.fit(X_train, y_train)
+    return modelo_optimo
 
 modelo = cargar_modelo_en_memoria()
 
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Clasificación Inteligente por Audio.**
-
-### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una pista:** Extracción de características rítmicas reales con Librosa.
-2. 🤖 **Inferencia por RandomForest:** El modelo clasifica el género de forma matemática.
-
----
-💡 *Pega un enlace de audio o escribe un género/artista para recibir sugerencias de ejercicios y rutinas.*"""
-
 if "messages" not in st.session_state:
-  st.session_state.messages = [{
-      "role": "assistant",
-      "content": MENSAJE_BIENVENIDA,
-  }]
-
+    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Clasificación Inteligente.**\nPega un enlace de audio para extraer features reales (MFCC, RMS, ZCR) y clasificar el género."}]
 if "historial_evaluaciones" not in st.session_state:
-  st.session_state.historial_evaluaciones = []
-
+    st.session_state.historial_evaluaciones = []
 
 def es_url_valida(texto):
-  texto_clean = texto.strip().lower()
-  dominios_validos = [
-      "spotify.com",
-      "youtube.com",
-      "youtu.be",
-      "soundcloud.com",
-      "music.apple.com",
-      "apple.com",
-  ]
-  return any(dominio in texto_clean for dominio in dominios_validos) and (
-      texto_clean.startswith("http")
-  )
-
+    dominios = ["youtube.com", "youtu.be", "soundcloud.com"]
+    return any(d in texto.strip().lower() for d in dominios) and texto.startswith("http")
 
 @st.cache_data(ttl=3600)
 def obtener_titulo_desde_link(url):
-  try:
-    if "youtube.com" in url or "youtu.be" in url:
-      oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
-      res = requests.get(oembed_url, timeout=3)
-      if res.status_code == 200:
-        return res.json().get("title", "Pista de Audio Externa")
+    try:
+        if "youtube.com" in url or "youtu.be" in url:
+            res = requests.get(f"https://www.youtube.com/oembed?url={url}&format=json", timeout=3)
+            if res.status_code == 200: return res.json().get("title", "Audio")
+    except: pass
+    return "Pista Analizada"
 
-    headers = {"User-Agent": "Mozilla/5.0"}
-    res = requests.get(url, headers=headers, timeout=3)
-    if res.status_code == 200:
-      soup = BeautifulSoup(res.text, "html.parser")
-      if soup.title and soup.title.string:
-        return soup.title.string.strip()
-  except Exception:
-    pass
-  return "Pista de Audio Externa"
-
-
+# ==========================================
+# 3. EXTRACCIÓN REAL DE FEATURES (FEATURE ENGINEERING)
+# ==========================================
 def analizar_audio_para_modelo(url):
-  nombre_visual = obtener_titulo_desde_link(url)
-
-  fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
-  os.close(fd)
-
-  ydl_opts = {
-      "format": "bestaudio/best",
-      "postprocessors": [{
-          "key": "FFmpegExtractAudio",
-          "preferredcodec": "mp3",
-          "preferredquality": "192",
-      }],
-      "outtmpl": ruta_salida.replace(".mp3", ""),
-      "quiet": True,
-  }
-
-  try:
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-      ydl.download([url])
-
-    archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
-    y, sr = librosa.load(archivo_final, duration=30.0, sr=22050)
-
-    if os.path.exists(archivo_final):
-      os.remove(archivo_final)
-
-    # EXTRACCIÓN ACÚSTICA
-    zcr = float(np.mean(librosa.feature.zero_crossing_rate(y)))
-    flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)))
-    rms = float(np.mean(librosa.feature.rms(y=y)))
-
-    y_harmonic, y_percussive = librosa.effects.hpss(y)
-
-    percussive_energy = float(np.mean(y_percussive))
-    harmonic_energy = float(np.mean(y_harmonic))
-
-    # FILTRO ESTRICTO: Aislar contenido hablado / podcasts / charlas de YouTube
-    if (
-        flatness > 0.025
-        or zcr > 0.06
-        or (percussive_energy / (harmonic_energy + 1e-5) < 0.35)
-    ):
-      return {
-          "cancion_formateada": nombre_visual,
-          "tempo": 0.0,
-          "danceability": 0.0,
-          "energy": 0.0,
-          "valence": 0.0,
-          "speechiness": 0.99,
-          "acousticness": 0.99,
-          "densidad_tatum": 0.0,
-          "num_secciones": 0,
-          "num_compases": 0,
-          "num_tiempos_beats": 0,
-          "es_no_musical": True,
-      }
-
-    onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
-    tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
-    tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
-    if tempo_val < 60:
-      tempo_val *= 2
-
-    num_beats = len(beats)
-
-    if tempo_val >= 165.0:
-      danceability, energy, valence, acousticness, densidad = (
-          0.89,
-          0.92,
-          0.86,
-          0.12,
-          4.3,
-      )
-    elif 135.0 <= tempo_val < 165.0:
-      danceability, energy, valence, acousticness, densidad = (
-          0.83,
-          0.86,
-          0.81,
-          0.19,
-          3.6,
-      )
-    elif 115.0 <= tempo_val < 135.0:
-      danceability, energy, valence, acousticness, densidad = (
-          0.76,
-          0.64,
-          0.71,
-          0.34,
-          2.8,
-      )
-    else:
-      danceability, energy, valence, acousticness, densidad = (
-          0.82,
-          0.85,
-          0.80,
-          0.20,
-          3.5,
-      )
-
-    return {
-        "cancion_formateada": nombre_visual,
-        "tempo": round(tempo_val, 1),
-        "danceability": danceability,
-        "energy": energy,
-        "valence": valence,
-        "speechiness": 0.05,
-        "acousticness": acousticness,
-        "densidad_tatum": densidad,
-        "num_secciones": int(np.random.randint(4, 8)),
-        "num_compases": int(np.random.randint(16, 64)),
-        "num_tiempos_beats": max(num_beats, 32),
-        "es_no_musical": False,
+    nombre_visual = obtener_titulo_desde_link(url)
+    fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
+    os.close(fd)
+    
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
+        "outtmpl": ruta_salida.replace(".mp3", ""),
+        "quiet": True,
     }
 
-  except Exception:
-    return {
-        "cancion_formateada": nombre_visual,
-        "tempo": 150.0,
-        "danceability": 0.82,
-        "energy": 0.85,
-        "valence": 0.80,
-        "speechiness": 0.05,
-        "acousticness": 0.20,
-        "densidad_tatum": 3.5,
-        "num_secciones": 5,
-        "num_compases": 32,
-        "num_tiempos_beats": 128,
-        "es_no_musical": False,
-    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        
+        archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
+        # Analizamos 45 segundos para tener una muestra estadística robusta
+        y, sr = librosa.load(archivo_final, duration=45.0, sr=22050)
+        if os.path.exists(archivo_final): os.remove(archivo_final)
 
+        # Extracción de variables acústicas reales
+        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
+        
+        rmse = float(np.mean(librosa.feature.rms(y=y)))
+        zcr = float(np.mean(librosa.feature.zero_crossing_rate(y=y)))
+        flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)))
+        
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+        beat_strength = float(np.mean(onset_env))
+        
+        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=5)
+        mfcc1 = float(np.mean(mfccs[0]))
+        mfcc2 = float(np.mean(mfccs[1]))
 
-def clasificar_genero_por_audio(features):
-  global modelo
-  try:
-    X_input = np.array([[
-        features["tempo"],
-        features["danceability"],
-        features["energy"],
-        features["valence"],
-        features["speechiness"],
-        features["acousticness"],
-        features["densidad_tatum"],
-        features["num_secciones"],
-        features["num_compases"],
-        features["num_tiempos_beats"],
-    ]])
-    pred = modelo.predict(X_input)
-    return str(pred[0])
-  except Exception as e:
-    return f"Error en Predicción: {str(e)}"
+        return {
+            "cancion_formateada": nombre_visual,
+            "features": [tempo_val, rmse, zcr, flatness, beat_strength, mfcc1, mfcc2],
+            "tempo": round(tempo_val, 1),
+            "densidad_tatum": round(beat_strength * 2, 2) # Proxy visual para la UI
+        }
 
+    except Exception as e:
+        return {"error": str(e)}
 
+# ==========================================
+# 4. LÓGICA DE UI Y RESPUESTAS
+# ==========================================
 def obtener_detalles_coreograficos(genero):
-  g_lower = genero.lower()
-  if "bachata" in g_lower:
-    pareja, grupo, solista = 8, 6, 7
-    metrica = (
-        "📌 **Métrica:** Compás de 4/4. Acentuación en el pulso 4 y 8 con tap /"
-        " golpe de cadera."
-    )
-    aprovechamiento = (
-        "• **Baile en Pareja:** Trabajo de conexión corporal estrecha y marco"
-        " fluido."
-    )
-    vestuario = "• **Estilo:** Ropa estilizada y ajustada para lucir las caderas."
-  elif "quebradita" in g_lower:
-    pareja, grupo, solista = 10, 9, 8
-    metrica = (
-        "📌 **Métrica:** Compás de 2/4 acelerado. Acentuación constante en el"
-        " bote o brinco."
-    )
-    aprovechamiento = (
-        "• **Acrobacias y Alzadas:** Trabajo de cargadas de alto impacto y"
-        " giros veloces."
-    )
-    vestuario = (
-        "• **Estilo:** Ropa vaquera moderna y botas con suela de soporte."
-    )
-  elif "timba" in g_lower:
-    pareja, grupo, solista = 9, 9, 9
-    metrica = (
-        "📌 **Métrica:** Clave Cubana / Timba (2/3 o 3/2). Polirritmia compleja."
-    )
-    aprovechamiento = (
-        "• **Nudos y Figuras Casino:** Complejidad en brazos y cambios de"
-        " dirección."
-    )
-    vestuario = "• **Estilo:** Ropa urbana deportiva o casual elegante."
-  else:
-    pareja, grupo, solista = 9, 8, 9
-    metrica = (
-        "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos en"
-        " campana y metales."
-    )
-    aprovechamiento = (
-        "• **Shines & Footwork:** Trabajo veloz de pies y giros múltiples en"
-        " pareja."
-    )
-    vestuario = (
-        "• **Estilo:** Ropa formal o semi-formal con brillo y movimiento."
-    )
-
-  return pareja, grupo, solista, metrica, aprovechamiento, vestuario
-
+    datos = {
+        "Bachata": (8, 6, 7, "Compás 4/4. Acento en pulso 4 y 8 con tap/cadera.", "Conexión corporal y marco fluido.", "Ropa estilizada."),
+        "Quebradita": (10, 9, 8, "Compás 2/4. Acento constante en el bote.", "Acrobacias y giros veloces.", "Ropa vaquera y botas."),
+        "Timba": (9, 9, 9, "Clave Cubana (2/3 o 3/2). Polirritmia compleja.", "Nudos Casino y despelote.", "Ropa urbana deportiva."),
+        "Salsa": (9, 8, 9, "Fraseo 8 tiempos. Acentos en campana.", "Shines rápidos y giros en eje.", "Ropa semi-formal.")
+    }
+    return datos.get(genero, (0,0,0,"","",""))
 
 CATALOGO_ENTRENAMIENTO = {
-    "quebradita": {
-        "canciones": [
-            "La Chona - Los Tucanes de Tijuana (~180 BPM)",
-            "La Quebradora - Banda El Mexicano (~175 BPM)",
-        ],
-        "rutina": (
-            "🔥 **Bloque de Ejercicios & HIIT (Fuerza Explosiva):**\n"
-            "• **Metodología Tabata:** 4 rondas (20 seg de trabajo / 10 seg de"
-            " descanso) de Sentadillas con Salto (Jump Squats) y Burpees.\n"
-            "• **Fortalecimiento:** 3 series de 15 elevaciones de talones"
-            " (calf raises) con peso corporal para proteger tobillos ante el"
-            " impacto de los botes."
-        ),
-    },
-    "bachata": {
-        "canciones": [
-            "Obsesión - Aventura (~125 BPM)",
-            "Propuesta Indecente - Romeo Santos (~122 BPM)",
-        ],
-        "rutina": (
-            "🔥 **Bloque de Ejercicios & HIIT (Control Pélvico y Core):**\n"
-            "• **Metodología Tabata:** 4 rondas (20 seg de trabajo / 10 seg de"
-            " descanso) de Plancha abdominal isométrica con rotación de cadera"
-            " y *Mountain Climbers* lentos.\n"
-            "• **Fortalecimiento:** 3 series de 15 repeticiones de puente de"
-            " glúteos unilateral para estabilidad en las marcaciones de cadera."
-        ),
-    },
-    "salsa": {
-        "canciones": [
-            "Llorarás - Oscar D'León (~160 BPM)",
-            "Valió la Pena - Marc Anthony (~148 BPM)",
-        ],
-        "rutina": (
-            "🔥 **Bloque de Ejercicios & HIIT (Agilidad de Pies y Cardio):**\n"
-            "• **Metodología HIIT:** 5 series de 45 segundos de skipping alto en"
-            " el lugar y 15 segundos de descanso.\n"
-            "• **Fortalecimiento:** 3 series de desplantes (*lunges*)"
-            " dinámicos alternados para velocidad de desplazamiento y eje"
-            " vertical."
-        ),
-    },
-    "timba": {
-        "canciones": [
-            "Ese Soy Yo - El Niño y la Verdad (~105 BPM)",
-            "Me Dicen Cuba - Alexander Abreu (~102 BPM)",
-        ],
-        "rutina": (
-            "🔥 **Bloque de Ejercicios & HIIT (Polirritmia y Coordinación):**\n"
-            "• **Metodología Tabata:** 4 rondas (20 seg de trabajo / 10 seg de"
-            " descanso) de Sentadillas sumo con toque de talón y saltos"
-            " laterales cruzados.\n"
-            "• **Fortalecimiento:** 3 series de planchas dinámicas tocando"
-            " hombros para disociación de tronco superior."
-        ),
-    },
+    "Quebradita": "🔥 **Bloque HIIT:** Tabata (20s/10s) Jump Squats y Burpees. Fortalecimiento de gemelos.",
+    "Bachata": "🔥 **Bloque Core:** Tabata Planchas con rotación. Puente de glúteos unilateral.",
+    "Salsa": "🔥 **Bloque Agilidad:** 5x45s skipping alto. Desplantes dinámicos alternados.",
+    "Timba": "🔥 **Bloque Polirritmia:** Sentadillas sumo con toque. Planchas tocando hombros."
 }
 
-
-def responder_consulta_texto(prompt):
-  p = prompt.lower()
-  if any(kw in p for kw in ["quebrad", "banda"]):
-    data = CATALOGO_ENTRENAMIENTO["quebradita"]
-    return (
-        "🤠 **Sugerencias de Quebradita:**\n\n"
-        + "\n".join([f"• {c}" for c in data["canciones"]])
-        + f"\n\n{data['rutina']}"
-    )
-  elif any(kw in p for kw in ["timb", "cuban"]):
-    data = CATALOGO_ENTRENAMIENTO["timba"]
-    return (
-        "🇨🇺 **Sugerencias de Timba Cubana:**\n\n"
-        + "\n".join([f"• {c}" for c in data["canciones"]])
-        + f"\n\n{data['rutina']}"
-    )
-  elif any(kw in p for kw in ["bachat"]):
-    data = CATALOGO_ENTRENAMIENTO["bachata"]
-    return (
-        "🇩🇴 **Sugerencias de Bachata:**\n\n"
-        + "\n".join([f"• {c}" for c in data["canciones"]])
-        + f"\n\n{data['rutina']}"
-    )
-  elif any(kw in p for kw in ["sals"]):
-    data = CATALOGO_ENTRENAMIENTO["salsa"]
-    return (
-        "🎺 **Sugerencias de Salsa:**\n\n"
-        + "\n".join([f"• {c}" for c in data["canciones"]])
-        + f"\n\n{data['rutina']}"
-    )
-  else:
-    return (
-        "💡 Pega un enlace de audio válido para analizar o escribe un género"
-        " (ej. *Salsa*, *Bachata*, *Timba*) para ver sugerencias de ejercicios,"
-        " rutinas HIIT y Tabata."
-    )
-
-
-# ==========================================
-# 4. INTERFAZ STREAMLIT
-# ==========================================
-st.markdown(
-    '<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>',
-    unsafe_allow_html=True,
-)
-st.markdown(
-    '<div class="sub-header">Clasificación nativa por RandomForest</div>',
-    unsafe_allow_html=True,
-)
-
-tabs = st.tabs(
-    ["💬 Chat Asistente", "📊 Historial & Métricas", "⚙️ Estado del Modelo"]
-)
+st.markdown('<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>', unsafe_allow_html=True)
+tabs = st.tabs(["💬 Chat Asistente", "📊 Historial", "⚙️ Modelo"])
 
 with tabs[0]:
-  for idx, msg in enumerate(st.session_state.messages):
-    with st.chat_message(msg["role"]):
-      st.markdown(msg["content"])
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
 with tabs[1]:
-  st.subheader("📈 Resumen de Evaluaciones de la Sesión")
-  if st.session_state.historial_evaluaciones:
-    df_hist = pd.DataFrame(st.session_state.historial_evaluaciones)
-    st.dataframe(df_hist, use_container_width=True)
-
-    csv_historial = df_hist.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 Descargar Historial de Evaluaciones (.csv)",
-        data=csv_historial,
-        file_name="historial_evaluaciones_sincopa.csv",
-        mime="text/csv",
-    )
-  else:
-    st.info("Aún no se han evaluado canciones en esta sesión.")
+    if st.session_state.historial_evaluaciones:
+        st.dataframe(pd.DataFrame(st.session_state.historial_evaluaciones), use_container_width=True)
 
 with tabs[2]:
-  st.subheader("🧠 Estado del Clasificador en Memoria")
-  st.success("✨ El modelo RandomForest se encuentra activo en memoria.")
-  st.json({
-      "Algoritmo": "RandomForestClassifier",
-      "Estimadores": 300,
-      "Clases Soportadas": list(modelo.classes_),
-  })
+    st.json({"Algoritmo": "RandomForestClassifier", "Features": ["tempo", "rmse", "zcr", "flatness", "beat_strength", "mfcc1", "mfcc2"], "Clases": list(modelo.classes_)})
 
-# ==========================================
-# 5. ENTRADA DEL CHAT
-# ==========================================
-if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
-  st.session_state.messages.append({"role": "user", "content": prompt})
+if prompt := st.chat_input("Pega un enlace de YouTube..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with tabs[0]:
+        with st.chat_message("user"): st.markdown(prompt)
 
-  with tabs[0]:
-    with st.chat_message("user"):
-      st.markdown(prompt)
+        if es_url_valida(prompt):
+            with st.chat_message("assistant"):
+                with st.spinner("🎧 Extrayendo MFCCs y variables acústicas..."):
+                    resultado = analizar_audio_para_modelo(prompt)
+                
+                if "error" in resultado:
+                    st.error(f"Error procesando audio: {resultado['error']}")
+                else:
+                    X_input = np.array([resultado["features"]])
+                    prediccion = modelo.predict(X_input)[0]
 
-    if es_url_valida(prompt):
-      with st.chat_message("assistant"):
-        with st.spinner(
-            "🎧 Procesando audio y aplicando análisis espectral..."
-        ):
-          features_extraidas = analizar_audio_para_modelo(prompt)
-
-        if features_extraidas.get("es_no_musical", False):
-          reply = (
-              "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
-              f" *{features_extraidas['cancion_formateada']}*\n\n*(El análisis"
-              " acústico detectó que la pista carece de la energía percusiva y"
-              " estructura rítmica propia de la música bailable).* "
-          )
-          st.markdown(reply)
-          st.session_state.messages.append(
-              {"role": "assistant", "content": reply}
-          )
-        else:
-          prediccion_ml = clasificar_genero_por_audio(features_extraidas)
-          if "Error" in prediccion_ml:
-            reply = f"❌ **Error:** {prediccion_ml}"
-            st.markdown(reply)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": reply}
-            )
-          else:
-            tempo_val = features_extraidas["tempo"]
-            par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = (
-                obtener_detalles_coreograficos(prediccion_ml)
-            )
-
-            genero_key = next(
-                (
-                    k
-                    for k in CATALOGO_ENTRENAMIENTO.keys()
-                    if k in prediccion_ml.lower()
-                ),
-                None,
-            )
-            rutina_entrenamiento = (
-                CATALOGO_ENTRENAMIENTO[genero_key]["rutina"]
-                if genero_key
-                else "🔥 **Bloque de Ejercicios & HIIT:**\n• **Metodología Tabata:** 4 rondas de acondicionamiento físico general adaptado al ritmo."
-            )
-
-            reply = f"""🎵 **Pista Analizada:** **{features_extraidas['cancion_formateada']}**
-🏷️ **Género Clasificado:** **{prediccion_ml}** 
-⏱️ **Tempo Estimado:** ~{tempo_val} BPM
-📊 **Densidad Tatum:** {features_extraidas['densidad_tatum']}
+                    if prediccion == "Podcast":
+                        reply = f"⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:** *{resultado['cancion_formateada']}*\n\n*(El clasificador identificó firmas acústicas de voz hablada/podcast: alta tasa de cruce por cero y baja fuerza de pulso rítmico).* "
+                        st.markdown(reply)
+                        st.session_state.messages.append({"role": "assistant", "content": reply})
+                    else:
+                        par, grp, sol, metrica, aprovechamiento, vestuario = obtener_detalles_coreograficos(prediccion)
+                        rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
+                        
+                        reply = f"""🎵 **Pista:** **{resultado['cancion_formateada']}**
+🏷️ **Clasificación del Modelo:** **{prediccion}** 
+⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
+📊 **Fuerza de Pulso (Proxy Densidad):** {resultado['densidad_tatum']}
 
 ---
+### 🎼 Marcación Coreográfica:
+{metrica}
 
-### 🎼 Marcación Coreográfica & Métrica Musical:
-{metrica_text}
+### 📊 Calificación:
+* 👫 Pareja: {par}/10 | 👯‍♀️ Grupo: {grp}/10 | 🕺 Solista: {sol}/10
 
----
-
-### 📊 Calificación por Modalidad de Baile:
-* 👫 **Pareja:** {par} / 10
-* 👯‍♀️ **Grupo:** {grp} / 10
-* 🕺 **Solista:** {sol} / 10
+### 💡 Aprovechamiento:
+{aprovechamiento}
 
 ---
-
-### 💡 Aprovechamiento Coreográfico Recomendado:
-{aprovechamiento_text}
-
----
-
-### {rutina_entrenamiento}
-
----
-
-### 👗 Sugerencia de Vestuario:
-{vestuario_text}
+{rutina}
 """
-            st.markdown(reply)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": reply}
-            )
-            st.session_state.historial_evaluaciones.append({
-                "Canción": features_extraidas["cancion_formateada"],
-                "Género": prediccion_ml,
-                "Tempo": tempo_val,
-            })
-    else:
-      with st.chat_message("assistant"):
-        reply = responder_consulta_texto(prompt)
-        st.markdown(reply)
-        st.session_state.messages.append({"role": "assistant", "content": reply})
+                        st.markdown(reply)
+                        st.session_state.messages.append({"role": "assistant", "content": reply})
+                        st.session_state.historial_evaluaciones.append({"Canción": resultado['cancion_formateada'], "Género": prediccion, "Tempo": resultado['tempo']})
+        else:
+            with st.chat_message("assistant"):
+                reply = "💡 Por favor, pega un enlace válido de YouTube o SoundCloud."
+                st.markdown(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
