@@ -66,10 +66,10 @@ def cargar_modelo_en_memoria():
 
 modelo = cargar_modelo_en_memoria()
 
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Separación Armónico-Percusiva.**
+MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Filtro Rítmico Estricto.**
 
 ### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** El sistema separa la señal en componentes armónicos y percusivos reales.
+1. 🎧 **Analiza una canción:** El sistema valida la consistencia periódica de los beats y separación HPSS.
 2. 🏷️ **Metadatos Limpios:** Captura del título solo para visualización.
 3. 🤖 **Inferencia por Machine Learning:** Clasificación robusta basada en la estructura física del audio.
 
@@ -121,7 +121,7 @@ def obtener_titulo_desde_link(url):
   return "Pista de Audio Externa"
 
 
-def analizar_audio_con_hpss(url):
+def analizar_audio_estricto(url):
   nombre_visual = obtener_titulo_desde_link(url)
 
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
@@ -149,18 +149,34 @@ def analizar_audio_con_hpss(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # SEPARACIÓN ARMÓNICO-PERCUSIVA (HPSS)
+    # 1. Separación HPSS
     y_harmonic, y_percussive = librosa.effects.hpss(y)
-
-    # Energía percusiva vs armónica (con variables sintácticamente correctas)
     energia_percusiva = np.sum(y_percussive**2)
     energia_harmonica = np.sum(y_harmonic**2)
     proporcion_percubase = energia_percusiva / (
         energia_harmonica + energia_percusiva + 1e-6
     )
 
-    # Si la proporción percusiva es muy baja, se trata de voz/habla y se descarta
-    if proporcion_percubase < 0.035:
+    # 2. Análisis de Onsets y Estabilidad Rítmica
+    onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
+    tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
+    tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
+    if tempo_val < 60:
+      tempo_val *= 2
+
+    num_beats = len(beats)
+
+    # Validar la regularidad de los intervalos entre beats (la música tiene intervalos constantes, la charla no)
+    if num_beats > 3:
+      beat_intervals = np.diff(beats)
+      regularidad_ritmica = np.std(beat_intervals) / (
+          np.mean(beat_intervals) + 1e-6
+      )
+    else:
+      regularidad_ritmica = 999.0
+
+    # FILTRO ESTRICTO: Si la energía percusiva es baja (< 5%) O la regularidad rítmica es errática (desviación alta)
+    if proporcion_percubase < 0.05 or regularidad_ritmica > 0.65:
       return {
           "cancion_formateada": nombre_visual,
           "tempo": 0.0,
@@ -176,32 +192,7 @@ def analizar_audio_con_hpss(url):
           "forzar_no_musical": True,
       }
 
-    # Análisis de ritmo sobre la pista percusiva limpia
-    onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
-    tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
-    tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
-    if tempo_val < 60:
-      tempo_val *= 2
-
-    num_beats = len(beats)
-
-    if num_beats < 10:
-      return {
-          "cancion_formateada": nombre_visual,
-          "tempo": round(tempo_val, 1),
-          "danceability": 0.05,
-          "energy": 0.05,
-          "valence": 0.20,
-          "speechiness": 0.95,
-          "acousticness": 0.85,
-          "densidad_tatum": 0.5,
-          "num_secciones": 2,
-          "num_compases": 4,
-          "num_tiempos_beats": max(num_beats, 5),
-          "forzar_no_musical": True,
-      }
-
-    # Descriptores musicales reales
+    # Descriptores musicales reales para canciones válidas
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -393,7 +384,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-header">Análisis acústico con separación HPSS</div>',
+    '<div class="sub-header">Análisis acústico con validación de regularidad'
+    " rítmica</div>",
     unsafe_allow_html=True,
 )
 
@@ -443,8 +435,10 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
     if es_url_valida(prompt):
       with st.chat_message("assistant"):
-        with st.spinner("🎧 Separando componentes armónicos y percusivos..."):
-          analisis = analizar_audio_con_hpss(prompt)
+        with st.spinner(
+            "🎧 Validando regularidad rítmica y consistencia acústica..."
+        ):
+          analisis = analizar_audio_estricto(prompt)
 
         if analisis.get("forzar_no_musical", False):
           prediccion_ml = "No Musical / Contenido Hablado"
@@ -455,8 +449,8 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
               f" *{analisis['cancion_formateada']}*\n\n*(El análisis"
-              " armónico-percusivo confirmó que no existe una base de"
-              " percusión rítmica bailable).* "
+              " determinó que el audio carece de la periodicidad y regularidad"
+              " rítmica propia de una pista musical).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
