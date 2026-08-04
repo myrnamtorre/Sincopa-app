@@ -33,43 +33,6 @@ st.markdown(
 )
 
 # ==========================================
-# 2. CARGA DEL MODELO ML & ESTADOS DE SESIÓN
-# ==========================================
-
-
-@st.cache_resource
-def cargar_modelo():
-  candidatos = [f for f in os.listdir(".") if f.endswith(".joblib")]
-  if candidatos:
-    try:
-      return joblib.load(candidatos[0])
-    except Exception:
-      pass
-  return None
-
-
-modelo = cargar_modelo()
-
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibración Acústica Pura.**
-
-### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** Pega cualquier enlace musical (se evalúan los primeros 30 segundos **únicamente** por acústica y pulso rítmico).
-2. 🏷️ **Metadatos Limpios:** Captura del título solo para visualización.
-3. 🤖 **Inferencia y Propuestas de Entrenamiento:** El sistema procesa el vector y clasifica el ritmo.
-
----
-💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
-
-if "messages" not in st.session_state:
-  st.session_state.messages = [{
-      "role": "assistant",
-      "content": MENSAJE_BIENVENIDA,
-  }]
-
-if "historial_evaluaciones" not in st.session_state:
-  st.session_state.historial_evaluaciones = []
-
-# ==========================================
 # 3. FUNCIONES DE ACÚSTICA Y ENTRENAMIENTO
 # ==========================================
 
@@ -116,6 +79,44 @@ def reentrenar_modelo_con_maestro():
     return True, nombre_modelo
   except Exception as e:
     return False, str(e)
+
+
+# ==========================================
+# 2. CARGA DEL MODELO ML & ESTADOS DE SESIÓN
+# ==========================================
+
+
+@st.cache_resource
+def cargar_modelo():
+  nombre_modelo = "modelo_sincopa_rf.joblib"
+  if not os.path.exists(nombre_modelo):
+    reentrenar_modelo_con_maestro()
+  try:
+    return joblib.load(nombre_modelo)
+  except Exception:
+    return None
+
+
+modelo = cargar_modelo()
+
+MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibración Acústica Pura.**
+
+### 📚 Guía Rápida de Uso:
+1. 🎧 **Analiza una canción:** Pega cualquier enlace musical (se evalúan los primeros 30 segundos **únicamente** por acústica y pulso rítmico).
+2. 🏷️ **Metadatos Limpios:** Captura del título solo para visualización.
+3. 🤖 **Inferencia y Propuestas de Entrenamiento:** El sistema procesa el vector y clasifica el ritmo.
+
+---
+💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
+
+if "messages" not in st.session_state:
+  st.session_state.messages = [{
+      "role": "assistant",
+      "content": MENSAJE_BIENVENIDA,
+  }]
+
+if "historial_evaluaciones" not in st.session_state:
+  st.session_state.historial_evaluaciones = []
 
 
 def es_url_valida(texto):
