@@ -69,7 +69,7 @@ def analizar_audio_por_enlace(url):
     fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
     os.close(fd)
     
- ydl_opts = {
+ ydl_opts = 
         "format": "bestaudio/best",
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
         "outtmpl": ruta_salida.replace(".mp3", ""),
@@ -82,7 +82,7 @@ def analizar_audio_por_enlace(url):
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15"
         }
-    }
+    
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
