@@ -187,7 +187,7 @@ def analizar_audio_primeros_30s(url):
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
 
-    # Extracción de descriptores acústicos
+    # Estimación de descriptores acústicos
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
