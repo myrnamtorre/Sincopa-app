@@ -163,20 +163,38 @@ def analizar_audio_primeros_30s(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extracción de características de pulso y ritmo
+    # Extracción de características avanzadas para detectar voz / charlas vs música
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
     if tempo_val < 60:
       tempo_val *= 2
 
+    # Métricas clave para diferenciar voz hablada de instrumentación musical
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
+    zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
 
-    # Filtro suavizado: solo se rechaza si es extremadamente plano (silencio o ruido blanco puro)
-    if spec_flatness > 0.35:
+    # FILTRO BLINDADO CONTRA PODCASTS Y CHARLAS:
+    # Si el título del video tiene palabras clave típicas de programas de conversación,
+    # o si la planitud espectral y la energía dinámica denotan voz hablada sin ritmo percusivo constante:
+    titulo_lower = nombre_visual.lower()
+    palabras_prohibidas = [
+        "pepe & teo",
+        "wavelenght",
+        "podcast",
+        "entrevista",
+        "charlas",
+        "vol ",
+        "con ",
+    ]
+    es_charla_por_titulo = any(
+        p in titulo_lower for p in palabras_prohibidas
+    )
+
+    if es_charla_por_titulo or (spec_flatness > 0.08 and len(beats) < 25):
       return {"es_musica": False, "cancion_formateada": nombre_visual}
 
-    # Asignación de características basada en rangos de tempo estándar
+    # Asignación normal para música real
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -226,20 +244,7 @@ def analizar_audio_primeros_30s(url):
     }
 
   except Exception as e:
-    return {
-        "es_musica": True,
-        "cancion_formateada": nombre_visual,
-        "tempo": 140.0,
-        "danceability": 0.80,
-        "energy": 0.82,
-        "valence": 0.78,
-        "speechiness": 0.05,
-        "acousticness": 0.20,
-        "densidad_tatum": 3.5,
-        "num_secciones": 5,
-        "num_compases": 32,
-        "num_tiempos_beats": 96,
-    }
+    return {"es_musica": False, "cancion_formateada": nombre_visual}
 
 
 def clasificar_genero_por_audio(features):
