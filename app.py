@@ -45,17 +45,17 @@ def cargar_modelo_en_memoria():
       [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
       [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
       [
-          20.0,
+          15.0,
           0.01,
-          0.01,
+          0.02,
           0.05,
-          0.95,
+          0.98,
           0.95,
           0.1,
           1,
           1,
-          2,
-      ],  # No Musical / Contenido Hablado extremo
+          3,
+      ],  # No Musical / Conversación extrema
   ])
   y_train = np.array([
       "Quebradita",
@@ -160,7 +160,7 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # 1. Separación Armónico-Percusiva (HPSS) y ZCR para verificar si es voz hablada
+    # 1. Separación Armónico-Percusiva (HPSS) y ZCR real
     y_harmonic, y_percussive = librosa.effects.hpss(y)
     zcr = np.mean(librosa.feature.zero_crossing_rate(y))
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
@@ -173,20 +173,21 @@ def analizar_audio_para_modelo(url):
 
     num_beats = len(beats)
 
-    # REGLA ESTRICTA DE AUDIO NO MUSICAL (Si hay mucha llanura espectral, ZCR alto o muy pocos beats musicales)
-    if flatness > 0.09 or zcr > 0.13 or num_beats < 15:
+    # 2. Detección pura basada en características extremas de voz/habla sin tocar géneros musicales
+    # Si el ZCR es altísimo y la planarespectral también, pasamos características de contenido hablado al modelo
+    if flatness > 0.15 and zcr > 0.16:
       return {
           "cancion_formateada": nombre_visual,
-          "tempo": 20.0,
+          "tempo": 15.0,
           "danceability": 0.01,
-          "energy": 0.01,
+          "energy": 0.02,
           "valence": 0.05,
-          "speechiness": 0.95,
+          "speechiness": 0.98,
           "acousticness": 0.95,
           "densidad_tatum": 0.1,
           "num_secciones": 1,
           "num_compases": 1,
-          "num_tiempos_beats": 2,
+          "num_tiempos_beats": 3,
       }
 
     # Si es música real, calculamos métricas basadas en su tempo natural
@@ -238,19 +239,18 @@ def analizar_audio_para_modelo(url):
     }
 
   except Exception as e:
-    # Si ocurre cualquier error o video bloqueado/hablado, forzamos la clase No Musical
     return {
         "cancion_formateada": nombre_visual,
-        "tempo": 20.0,
+        "tempo": 15.0,
         "danceability": 0.01,
-        "energy": 0.01,
+        "energy": 0.02,
         "valence": 0.05,
-        "speechiness": 0.95,
+        "speechiness": 0.98,
         "acousticness": 0.95,
         "densidad_tatum": 0.1,
         "num_secciones": 1,
         "num_compases": 1,
-        "num_tiempos_beats": 2,
+        "num_tiempos_beats": 3,
     }
 
 
