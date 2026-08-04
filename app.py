@@ -58,7 +58,7 @@ if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
 # ==========================================
-# 3. EXTRACCIÓN PURA DE TÍTULOS
+# 3. EXTRACCIÓN Y VALIDACIÓN DE CONTENIDO
 # ==========================================
 @st.cache_data(ttl=3600)
 def extraer_titulo_link(url):
@@ -84,10 +84,25 @@ def analizar_entrada(entrada):
     else:
         nombre_detectado = entrada
 
-    # Generamos un vector numérico determinista basado en el hash del texto para evaluar en el modelo
-    seed = abs(hash(nombre_detectado)) % len(modelo.classes_)
+    texto_lower = nombre_detectado.lower()
     
-    # Asignamos un perfil de características base según la semilla numérica matemática
+    # Validación estricta orientada a detectar podcasts, episodios o relatos hablados
+    palabras_rechazo = [
+        "podcast", "episodio", "relato", "relatos", "criminal", "crimen", 
+        "terror", "miedo", "historias", "entrevista", "conversación", "noticias", 
+        "spotify", "apple podcasts", "ivoox"
+    ]
+    
+    es_no_musical = any(p in texto_lower for p in palabras_rechazo)
+
+    if es_no_musical:
+        return {
+            "es_valido": False,
+            "titulo": nombre_detectado
+        }
+
+    # Vector numérico determinista para la música real
+    seed = abs(hash(nombre_detectado)) % len(modelo.classes_)
     perfiles = [
         ([128.0, 0.19, 0.065, 0.0055, 1.55, -145, 138], "Bachata"),
         ([162.0, 0.23, 0.075, 0.0085, 1.75, -115, 128], "Salsa"),
@@ -97,11 +112,10 @@ def analizar_entrada(entrada):
     
     features, _ = perfiles[seed % len(perfiles)]
     X_input = np.array([features])
-    
-    # CLASIFICACIÓN PURA POR MODELO (Sin tocar títulos para forzar géneros)
     prediccion = modelo.predict(X_input)[0]
 
     return {
+        "es_valido": True,
         "titulo": nombre_detectado,
         "features": features,
         "tempo": round(features[0], 1),
@@ -140,14 +154,22 @@ with tabs[0]:
             with st.chat_message("user"): st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                with st.spinner("🎧 Procesando metadatos y modelo de Machine Learning..."):
+                with st.spinner("🎧 Validando contenido y metadatos..."):
                     resultado = analizar_entrada(prompt)
                 
-                prediccion = resultado["genero"]
-                par, grp, sol, metrica, aprovechamiento, _ = obtener_detalles_coreograficos(prediccion)
-                rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
-                
-                reply = f"""🎵 **Pista / Enlace:** **{resultado['titulo']}**
+                if not resultado["es_valido"]:
+                    reply = f"""⚠️ **Audio Rechazado (Contenido No Musical)**
+🎵 *{resultado['titulo']}*
+
+El sistema detectó que corresponde a un podcast o contenido hablado. No se realizará la evaluación coreográfica."""
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                else:
+                    prediccion = resultado["genero"]
+                    par, grp, sol, metrica, aprovechamiento, _ = obtener_detalles_coreograficos(prediccion)
+                    rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
+                    
+                    reply = f"""🎵 **Pista / Enlace:** **{resultado['titulo']}**
 🏷️ **Clasificación del Modelo:** **{prediccion}** 
 ⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
 
@@ -164,9 +186,9 @@ with tabs[0]:
 ---
 {rutina}
 """
-                st.markdown(reply)
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-                st.session_state.historial_evaluaciones.append({"Canción": resultado['titulo'], "Género": prediccion, "Tempo": resultado['tempo']})
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                    st.session_state.historial_evaluaciones.append({"Canción": resultado['titulo'], "Género": prediccion, "Tempo": resultado['tempo']})
 
 with tabs[1]:
     if st.session_state.historial_evaluaciones:
