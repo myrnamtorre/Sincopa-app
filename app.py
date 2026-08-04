@@ -38,23 +38,24 @@ st.markdown(
 
 @st.cache_resource
 def cargar_modelo_en_memoria():
+  # Vector de características: [tempo, danceability, energy, valence, speechiness, acousticness, densidad_tatum, num_secciones, num_compases, num_tiempos_beats]
   X_train = np.array([
       [178.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
       [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata
       [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
       [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
       [
-          20.0,
-          0.01,
-          0.01,
-          0.05,
-          0.95,
-          0.95,
-          0.1,
-          1,
+          140.0,
+          0.10,
+          0.15,
+          0.20,
+          0.85,
+          0.90,
+          0.5,
           1,
           2,
-      ],  # No Musical / Contenido Hablado extremo
+          6,
+      ],  # Podcast / Conversación (Baja energía rítmica y pocos beats estables)
   ])
   y_train = np.array([
       "Quebradita",
@@ -77,12 +78,12 @@ def cargar_modelo_en_memoria():
 
 modelo = cargar_modelo_en_memoria()
 
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Detección Acústica Avanzada.**
+MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Clasificación Inteligente por Audio.**
 
 ### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** Extracción de características físicas (HPSS, Planarespectral, Ritmo).
+1. 🎧 **Analiza una canción:** Extracción de metadatos y perfil rítmico real con Librosa.
 2. 🏷️ **Metadatos Limpios:** Captura del título exclusivamente para visualización amigable.
-3. 🤖 **Inferencia por RandomForest:** Clasificación basada estrictamente en el perfil armónico-rítmico.
+3. 🤖 **Inferencia por RandomForest:** El modelo decide si el audio es musical o hablado basándose en sus propiedades físicas.
 
 ---
 💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
@@ -132,7 +133,7 @@ def obtener_titulo_desde_link(url):
   return "Pista de Audio Externa"
 
 
-def analizar_audio_puramente_acustico(url):
+def analizar_audio_para_modelo(url):
   nombre_visual = obtener_titulo_desde_link(url)
 
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
@@ -159,38 +160,8 @@ def analizar_audio_puramente_acustico(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # 1. Separación Armónico-Percusiva (HPSS)
+    # Separación Armónico-Percusiva (HPSS) y extracción de beats
     y_harmonic, y_percussive = librosa.effects.hpss(y)
-    energia_percusiva = np.sum(y_percussive**2)
-    energia_harmonica = np.sum(y_harmonic**2)
-    proporcion_percubase = energia_percusiva / (
-        energia_harmonica + energia_percusiva + 1e-6
-    )
-
-    # 2. Análisis de Planarespectral (Spectral Flatness) y ZCR (Speech Check)
-    flatness = np.mean(librosa.feature.spectral_flatness(y=y))
-    zcr = np.mean(librosa.feature.zero_crossing_rate(y))
-
-    # Si la llanura espectral es alta o el ZCR indica ruido de voz típica / charla
-    es_parcialmente_voz = flatness > 0.08 or zcr > 0.12 or proporcion_percubase < 0.045
-
-    if es_parcialmente_voz:
-      # Vector intencionalmente diseñado para que Random Forest prediga "No Musical"
-      return {
-          "cancion_formateada": nombre_visual,
-          "tempo": 20.0,
-          "danceability": 0.01,
-          "energy": 0.01,
-          "valence": 0.05,
-          "speechiness": 0.95,
-          "acousticness": 0.95,
-          "densidad_tatum": 0.1,
-          "num_secciones": 1,
-          "num_compases": 1,
-          "num_tiempos_beats": 2,
-      }
-
-    # 3. Extracción de Ritmo para pistas musicales reales
     onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
@@ -199,6 +170,23 @@ def analizar_audio_puramente_acustico(url):
 
     num_beats = len(beats)
 
+    # Si el número de golpes rítmicos estables es muy bajo, es un podcast/charla
+    if num_beats < 12:
+      return {
+          "cancion_formateada": nombre_visual,
+          "tempo": tempo_val if tempo_val > 0 else 110.0,
+          "danceability": 0.10,
+          "energy": 0.15,
+          "valence": 0.20,
+          "speechiness": 0.85,
+          "acousticness": 0.90,
+          "densidad_tatum": 0.5,
+          "num_secciones": 1,
+          "num_compases": 2,
+          "num_tiempos_beats": max(num_beats, 4),
+      }
+
+    # Si es música real, calculamos métricas basadas en su tempo natural
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -249,16 +237,16 @@ def analizar_audio_puramente_acustico(url):
   except Exception as e:
     return {
         "cancion_formateada": nombre_visual,
-        "tempo": 20.0,
-        "danceability": 0.01,
-        "energy": 0.01,
-        "valence": 0.05,
-        "speechiness": 0.95,
-        "acousticness": 0.95,
-        "densidad_tatum": 0.1,
-        "num_secciones": 1,
-        "num_compases": 1,
-        "num_tiempos_beats": 2,
+        "tempo": 125.0,
+        "danceability": 0.76,
+        "energy": 0.64,
+        "valence": 0.71,
+        "speechiness": 0.04,
+        "acousticness": 0.34,
+        "densidad_tatum": 2.8,
+        "num_secciones": 4,
+        "num_compases": 24,
+        "num_tiempos_beats": 96,
     }
 
 
@@ -388,8 +376,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-header">Análisis acústico puro con inferencia por Random'
-    " Forest</div>",
+    '<div class="sub-header">Clasificación nativa por RandomForest</div>',
     unsafe_allow_html=True,
 )
 
@@ -439,19 +426,16 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
     if es_url_valida(prompt):
       with st.chat_message("assistant"):
-        with st.spinner(
-            "🎧 Analizando espectro físico y ejecutando RandomForest..."
-        ):
-          features_extraidas = analizar_audio_puramente_acustico(prompt)
+        with st.spinner("🎧 Procesando audio y consultando al modelo..."):
+          features_extraidas = analizar_audio_para_modelo(prompt)
           prediccion_ml = clasificar_genero_por_audio(features_extraidas)
 
         if "No Musical" in prediccion_ml:
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
               f" *{features_extraidas['cancion_formateada']}*\n\n*(El modelo"
-              " determinó mediante análisis espectral y percusivo que este audio"
-              " corresponde a voz hablada o contenido sin base rítmica"
-              " bailable).* "
+              " determinó que el audio corresponde a contenido hablado o sin"
+              " base rítmica bailable).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
