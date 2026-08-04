@@ -83,14 +83,14 @@ def analizar_audio_universal(entrada):
     fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
     os.close(fd)
     
-    # Si es un enlace, intentamos obtener su título real para buscarlo de forma limpia
+    # Extraemos el título legible de la web si es enlace, o usamos el texto directo
     if entrada.startswith("http"):
         nombre_pista = obtener_titulo_web(entrada)
-        # Búsqueda abierta por texto para evitar bloqueos directos de ID o firewalls de nube
-        query_busqueda = f"ytsearch1:{nombre_pista} audio"
     else:
         nombre_pista = entrada
-        query_busqueda = f"ytsearch1:{entrada} audio"
+
+    # FORZAMOS BÚSQUEDA ABIERTA: Evita el error 403 de URLs directas bloqueadas
+    query_busqueda = f"ytsearch1:{nombre_pista} audio"
 
     ydl_opts = {
         "format": "bestaudio/best",
