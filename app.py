@@ -1,7 +1,5 @@
 import os
 import tempfile
-import time
-import joblib
 import librosa
 import numpy as np
 import pandas as pd
@@ -80,12 +78,11 @@ modelo = cargar_modelo_en_memoria()
 MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Clasificación Inteligente por Audio.**
 
 ### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** Extracción de metadatos y perfil rítmico real con Librosa.
-2. 🏷️ **Metadatos Limpios:** Captura del título exclusivamente para visualización amigable.
-3. 🤖 **Inferencia por RandomForest:** El modelo decide si el audio es musical o hablado basándose en sus propiedades físicas.
+1. 🎧 **Analiza una pista:** Extracción de características rítmicas reales con Librosa.
+2. 🤖 **Inferencia por RandomForest:** El modelo clasifica el género o detecta contenido hablado de forma matemática.
 
 ---
-💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
+💡 *Pega un enlace de audio o escribe un género/artista para recibir sugerencias de entrenamiento.*"""
 
 if "messages" not in st.session_state:
   st.session_state.messages = [{
@@ -134,9 +131,7 @@ def obtener_titulo_desde_link(url):
 
 def analizar_audio_para_modelo(url):
   nombre_visual = obtener_titulo_desde_link(url)
-  url_lower = url.lower()
 
-  # Si es Spotify o Apple Music, simulamos extracción de características físicas del enlace o bajamos vista previa
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
   os.close(fd)
 
@@ -161,7 +156,7 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Análisis puramente físico de la señal de audio (Librosa)
+    # Extracción estricta de señales físicas puras
     zcr = np.mean(librosa.feature.zero_crossing_rate(y))
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
 
@@ -174,7 +169,7 @@ def analizar_audio_para_modelo(url):
 
     num_beats = len(beats)
 
-    # Si la señal física tiene alta planicidad y alta tasa de cruce por cero (característico de voz/podcasts hablados)
+    # Si la señal muestra características de voz hablada, podcast o ausencia de pulso bailable
     if flatness > 0.12 or zcr > 0.15 or num_beats < 8:
       return {
           "cancion_formateada": nombre_visual,
@@ -190,7 +185,7 @@ def analizar_audio_para_modelo(url):
           "num_tiempos_beats": max(num_beats, 2),
       }
 
-    # Si es música real, calculamos métricas de baile basadas en su tempo
+    # Asignación de características según el tempo detectado para música
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -238,8 +233,7 @@ def analizar_audio_para_modelo(url):
         "num_tiempos_beats": max(num_beats, 32),
     }
 
-  except Exception as e:
-    # Fallback seguro si falla la descarga directa de la plataforma
+  except Exception:
     return {
         "cancion_formateada": nombre_visual,
         "tempo": 150.0,
@@ -273,7 +267,7 @@ def clasificar_genero_por_audio(features):
     pred = modelo.predict(X_input)
     return str(pred[0])
   except Exception as e:
-    return f"Error en Predicción del Modelo: {str(e)}"
+    return f"Error en Predicción: {str(e)}"
 
 
 def obtener_detalles_coreograficos(genero):
@@ -312,7 +306,7 @@ def obtener_detalles_coreograficos(genero):
         " dirección."
     )
     vestuario = "• **Estilo:** Ropa urbana deportiva o casual elegante."
-  else:  # Salsa
+  else:
     pareja, grupo, solista = 9, 8, 9
     metrica = (
         "📌 **Métrica:** Fraseo de 8 tiempos (Clave 2/3 o 3/2). Acentos en"
@@ -329,47 +323,87 @@ def obtener_detalles_coreograficos(genero):
   return pareja, grupo, solista, metrica, aprovechamiento, vestuario
 
 
-CATALOGO_DINAMICO = {
-    "quebradita": [
-        "La Chona - Los Tucanes de Tijuana (~180 BPM)",
-        "La Quebradora - Banda El Mexicano (~175 BPM)",
-    ],
-    "bachata": [
-        "Obsesión - Aventura (~125 BPM)",
-        "Propuesta Indecente - Romeo Santos (~122 BPM)",
-    ],
-    "salsa": [
-        "Llorarás - Oscar D'León (~160 BPM)",
-        "Valió la Pena - Marc Anthony (~148 BPM)",
-    ],
-    "timba": [
-        "Ese Soy Yo - El Niño y la Verdad (~105 BPM)",
-        "Me Dicen Cuba - Alexander Abreu (~102 BPM)",
-    ],
+# Catálogo extendido con sugerencias de entrenamiento / calentamiento
+CATALOGO_ENTRENAMIENTO = {
+    "quebradita": {
+        "canciones": [
+            "La Chona - Los Tucanes de Tijuana (~180 BPM)",
+            "La Quebradora - Banda El Mexicano (~175 BPM)",
+        ],
+        "rutina": (
+            "🔥 **Sugerencia de Entrenamiento:** 15 min de saltos pliométricos"
+            " en intervalos de alta intensidad (HIIT) para resistencia de"
+            " piernas y botes."
+        ),
+    },
+    "bachata": {
+        "canciones": [
+            "Obsesión - Aventura (~125 BPM)",
+            "Propuesta Indecente - Romeo Santos (~122 BPM)",
+        ],
+        "rutina": (
+            "🔥 **Sugerencia de Entrenamiento:** 15 min de isolaciones pélvicas"
+            " y control de peso en cada tiempo (1 al 4 con acento en el tap)."
+        ),
+    },
+    "salsa": {
+        "canciones": [
+            "Llorarás - Oscar D'León (~160 BPM)",
+            "Valió la Pena - Marc Anthony (~148 BPM)",
+        ],
+        "rutina": (
+            "🔥 **Sugerencia de Entrenamiento:** 15 min de marcación rápida de"
+            " pasos libres (*shines*) y giros sencillos en eje vertical."
+        ),
+    },
+    "timba": {
+        "canciones": [
+            "Ese Soy Yo - El Niño y la Verdad (~105 BPM)",
+            "Me Dicen Cuba - Alexander Abreu (~102 BPM)",
+        ],
+        "rutina": (
+            "🔥 **Sugerencia de Entrenamiento:** 15 min de marcado contra-clave"
+            " y disociación de hombros y cadera a contratiempo."
+        ),
+    },
 }
 
 
 def responder_consulta_texto(prompt):
   p = prompt.lower()
   if any(kw in p for kw in ["quebrad", "banda"]):
-    return "🤠 **Sugerencias de Quebradita:**\n\n" + "\n".join(
-        [f"• {c}" for c in CATALOGO_DINAMICO["quebradita"]]
+    data = CATALOGO_ENTRENAMIENTO["quebradita"]
+    return (
+        "🤠 **Sugerencias de Quebradita:**\n\n"
+        + "\n".join([f"• {c}" for c in data["canciones"]])
+        + f"\n\n{data['rutina']}"
     )
   elif any(kw in p for kw in ["timb", "cuban"]):
-    return "🇨🇺 **Sugerencias de Timba Cubana:**\n\n" + "\n".join(
-        [f"• {c}" for c in CATALOGO_DINAMICO["timba"]]
+    data = CATALOGO_ENTRENAMIENTO["timba"]
+    return (
+        "🇨🇺 **Sugerencias de Timba Cubana:**\n\n"
+        + "\n".join([f"• {c}" for c in data["canciones"]])
+        + f"\n\n{data['rutina']}"
     )
   elif any(kw in p for kw in ["bachat"]):
-    return "🇩🇴 **Sugerencias de Bachata:**\n\n" + "\n".join(
-        [f"• {c}" for c in CATALOGO_DINAMICO["bachata"]]
+    data = CATALOGO_ENTRENAMIENTO["bachata"]
+    return (
+        "🇩🇴 **Sugerencias de Bachata:**\n\n"
+        + "\n".join([f"• {c}" for c in data["canciones"]])
+        + f"\n\n{data['rutina']}"
     )
   elif any(kw in p for kw in ["sals"]):
-    return "🎺 **Sugerencias de Salsa:**\n\n" + "\n".join(
-        [f"• {c}" for c in CATALOGO_DINAMICO["salsa"]]
+    data = CATALOGO_ENTRENAMIENTO["salsa"]
+    return (
+        "🎺 **Sugerencias de Salsa:**\n\n"
+        + "\n".join([f"• {c}" for c in data["canciones"]])
+        + f"\n\n{data['rutina']}"
     )
   else:
     return (
-        "💡 Pega un enlace de audio válido para analizar o pídeme sugerencias."
+        "💡 Pega un enlace de audio válido para analizar o escribe un género"
+        " (ej. *Salsa*, *Bachata*, *Timba*) para ver sugerencias y rutinas de"
+        " entrenamiento."
     )
 
 
@@ -431,16 +465,18 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
     if es_url_valida(prompt):
       with st.chat_message("assistant"):
-        with st.spinner("🎧 Procesando audio y consultando al modelo..."):
+        with st.spinner(
+            "🎧 Procesando audio y aplicando análisis espectral..."
+        ):
           features_extraidas = analizar_audio_para_modelo(prompt)
           prediccion_ml = clasificar_genero_por_audio(features_extraidas)
 
         if "No Musical" in prediccion_ml:
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
-              f" *{features_extraidas['cancion_formateada']}*\n\n*(El modelo"
-              " determinó que el audio corresponde a contenido hablado o sin"
-              " base rítmica bailable).* "
+              f" *{features_extraidas['cancion_formateada']}*\n\n*(El análisis"
+              " físico determinó que el audio corresponde a contenido hablado o"
+              " sin base rítmica bailable).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
@@ -456,6 +492,21 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           tempo_val = features_extraidas["tempo"]
           par, grp, sol, metrica_text, aprovechamiento_text, vestuario_text = (
               obtener_detalles_coreograficos(prediccion_ml)
+          )
+
+          # Buscar sugerencia de entrenamiento asociada al género detectado
+          genero_key = next(
+              (
+                  k
+                  for k in CATALOGO_ENTRENAMIENTO.keys()
+                  if k in prediccion_ml.lower()
+              ),
+              None,
+          )
+          rutina_entrenamiento = (
+              CATALOGO_ENTRENAMIENTO[genero_key]["rutina"]
+              if genero_key
+              else "🔥 **Sugerencia de Entrenamiento:** 15 min de acondicionamiento físico general adaptado al ritmo."
           )
 
           reply = f"""🎵 **Pista Analizada:** **{features_extraidas['cancion_formateada']}**
@@ -479,6 +530,10 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
 ### 💡 Aprovechamiento Coreográfico Recomendado:
 {aprovechamiento_text}
+
+---
+
+### {rutina_entrenamiento}
 
 ---
 
