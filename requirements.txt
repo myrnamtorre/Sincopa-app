@@ -6,5 +6,5 @@ joblib
 requests
 beautifulsoup4
 librosa
-yt-dlp
+yt-dlp>=2026.07.01
 reportlab
