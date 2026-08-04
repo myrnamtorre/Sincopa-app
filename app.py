@@ -160,7 +160,7 @@ def analizar_audio_para_modelo(url):
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
 
-    # Corrección matemática de octava/sub-tempo de librosa
+    # Corrección matemática robusta de octava / sub-tempo en librosa
     if tempo_val < 135:
       picos_persecusion = len(
           librosa.util.peak_pick(
@@ -173,25 +173,22 @@ def analizar_audio_para_modelo(url):
               wait=10,
           )
       )
-      if picos_persecusion > 45:  # pistas densas/rápidas
+      if picos_persecusion > 40:
         tempo_val *= 1.5
 
-    if tempo_val < 60:
+    if tempo_val < 65:
       tempo_val *= 2
 
     num_beats = len(beats)
     percussive_energy = np.mean(y_percussive)
     harmonic_energy = np.mean(y_harmonic)
+    ratio_energia = percussive_energy / (harmonic_energy + 1e-5)
 
-    # Filtro acústico puro para contenido hablado
-    if (
-        flatness > 0.05
-        and zcr > 0.08
-        and (percussive_energy / (harmonic_energy + 1e-5) < 0.25)
-    ):
+    # Detector estricto de contenido hablado / podcasts (Evita falsos positivos)
+    if (flatness > 0.035 and zcr > 0.065) or (ratio_energia < 0.18):
       return {
           "cancion_formateada": nombre_visual,
-          "tempo": 90.0,
+          "tempo": round(tempo_val, 1),
           "danceability": 0.01,
           "energy": 0.02,
           "valence": 0.05,
@@ -203,7 +200,7 @@ def analizar_audio_para_modelo(url):
           "num_tiempos_beats": 2,
       }
 
-    # Mapeo matemático según rangos de tempo
+    # Mapeo dinámico y proporcional según el tempo real detectado
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.85,
@@ -230,11 +227,11 @@ def analizar_audio_para_modelo(url):
       )
     else:
       danceability, energy, valence, acousticness, densidad = (
-          0.85,
-          0.90,
-          0.82,
-          0.15,
-          4.1,
+          0.72,
+          0.60,
+          0.65,
+          0.40,
+          2.4,
       )
 
     return {
