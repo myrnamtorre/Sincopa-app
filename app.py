@@ -30,21 +30,43 @@ st.markdown(
 )
 
 # ==========================================
-# 2. ENTRENAMIENTO DINÁMICO EN MEMORIA (ML ROBUSTO)
+# 2. ENTRENAMIENTO DINÁMICO EN MEMORIA (ML HÍBRIDO)
 # ==========================================
 
 
 @st.cache_resource
 def cargar_modelo_en_memoria():
-  # Dataset ampliado para evitar falsos positivos hacia la timba
+  # Dataset con fronteras de decisión acústica más finas entre Bachata y Timba
   X_train = np.array([
       [175.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
-      [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata 1
+      [
+          125.0,
+          0.76,
+          0.64,
+          0.71,
+          0.04,
+          0.34,
+          2.8,
+          4,
+          24,
+          96,
+      ],  # Bachata (acústica moderada/alta, tempo medio)
       [122.0, 0.74, 0.62, 0.69, 0.03, 0.38, 2.7, 4, 22, 90],  # Bachata 2
-      [128.0, 0.78, 0.66, 0.73, 0.04, 0.32, 2.9, 5, 26, 100],  # Bachata 3
+      [
+          105.0,
+          0.85,
+          0.90,
+          0.82,
+          0.06,
+          0.15,
+          4.1,
+          5,
+          30,
+          120,
+      ],  # Timba (alta percusión, alta energía percusiva, tempo 100-110)
+      [102.0, 0.83, 0.88, 0.80, 0.05, 0.18, 3.9, 5, 28, 115],  # Timba 2
       [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa 1
       [150.0, 0.81, 0.84, 0.79, 0.07, 0.21, 3.4, 5, 36, 140],  # Salsa 2
-      [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
       [
           90.0,
           0.01,
@@ -62,17 +84,17 @@ def cargar_modelo_en_memoria():
       "Quebradita",
       "Bachata",
       "Bachata",
-      "Bachata",
-      "Salsa",
-      "Salsa",
       "Timba",
+      "Timba",
+      "Salsa",
+      "Salsa",
       "No Musical / Contenido Hablado",
   ])
 
   modelo_optimo = RandomForestClassifier(
-      n_estimators=300,
-      max_depth=12,
-      min_samples_split=3,
+      n_estimators=400,
+      max_depth=14,
+      min_samples_split=2,
       random_state=42,
       class_weight="balanced",
   )
@@ -140,7 +162,6 @@ def analizar_audio_para_modelo(url):
   nombre_visual = obtener_titulo_desde_link(url)
   texto_analisis = nombre_visual.lower()
 
-  # 1. Filtro rápido por palabras clave de contenido hablado exclusivamente
   palabras_habladas = [
       "podcast",
       "relatos",
@@ -203,7 +224,6 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # 2. ANÁLISIS ACÚSTICO
     zcr = np.mean(librosa.feature.zero_crossing_rate(y))
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     rms = np.mean(librosa.feature.rms(y=y))
@@ -219,7 +239,6 @@ def analizar_audio_para_modelo(url):
     percussive_energy = np.mean(y_percussive)
     harmonic_energy = np.mean(y_harmonic)
 
-    # Filtro estricto exclusivo para voz humana / charlas reales
     if (
         flatness > 0.08
         and zcr > 0.12
@@ -240,7 +259,7 @@ def analizar_audio_para_modelo(url):
           "num_tiempos_beats": 2,
       }
 
-    # Asistentes de contexto por título para géneros específicos
+    # Únicamente ajustamos rangos extremos si el tempo se sale por completo de la lógica física
     if (
         "quebradora" in texto_analisis
         or "banda" in texto_analisis
@@ -248,14 +267,8 @@ def analizar_audio_para_modelo(url):
     ):
       if tempo_val < 165.0:
         tempo_val = 175.0
-    elif (
-        "bachata" in texto_analisis
-        or "romeo santos" in texto_analisis
-        or "aventura" in texto_analisis
-    ):
-      if not (110.0 <= tempo_val <= 135.0):
-        tempo_val = 125.0
 
+    # Mapeo de características acústicas basadas puramente en el tempo y energía detectados
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -282,11 +295,11 @@ def analizar_audio_para_modelo(url):
       )
     else:
       danceability, energy, valence, acousticness, densidad = (
-          0.82,
           0.85,
-          0.80,
-          0.20,
-          3.5,
+          0.90,
+          0.82,
+          0.15,
+          4.1,
       )
 
     return {
@@ -399,41 +412,40 @@ CATALOGO_ENTRENAMIENTO = {
             "La Chona - Los Tucanes de Tijuana (~180 BPM)",
             "La Quebradora - Banda El Mexicano (~175 BPM)",
         ],
-        "rutina": (
-            "🔥 **Sugerencia de Entrenamiento:** 15 min de saltos pliométricos"
-            " en intervalos de alta intensidad (HIIT) para resistencia de"
-            " piernas y botes."
-        ),
+        "rutina": """🔥 **Entrenamiento Funcional (HIIT & Pliometría):**
+* **Bloque 1 (Tabata 4 min):** Sentadillas con salto (Jump Squats) a máxima velocidad (20s trabajo / 10s descanso).
+* **Bloque 2 (Fuerza de Pierna):** 4 series de 15 Desplantes búlgaros (Bulgarian Split Squats) por pierna.
+* **Bloque 3 (Cardio Explosivo):** 3 series de Burpees continuos durante 45 segundos para resistencia anaeróbica.""",
     },
     "bachata": {
         "canciones": [
             "Obsesión - Aventura (~125 BPM)",
             "Propuesta Indecente - Romeo Santos (~122 BPM)",
         ],
-        "rutina": (
-            "🔥 **Sugerencia de Entrenamiento:** 15 min de isolaciones pélvicas"
-            " y control de peso en cada tiempo (1 al 4 con acento en el tap)."
-        ),
+        "rutina": """🔥 **Entrenamiento Funcional (Core & Estabilidad):**
+* **Bloque 1 (Tabata 4 min):** Sentadillas isométricas con elevación de talones y giro de cadera (20s trabajo / 10s descanso).
+* **Bloque 2 (Zona Media):** 4 series de Plancha abdominal con toque de hombros (1 min por serie).
+* **Bloque 3 (Glúteos & Caderas):** 4 series de Hip Thrust con pausa de 2 segundos arriba para control pélvico.""",
     },
     "salsa": {
         "canciones": [
             "Llorarás - Oscar D'León (~160 BPM)",
             "Valió la Pena - Marc Anthony (~148 BPM)",
         ],
-        "rutina": (
-            "🔥 **Sugerencia de Entrenamiento:** 15 min de marcación rápida de"
-            " pasos libres (*shines*) y giros sencillos en eje vertical."
-        ),
+        "rutina": """🔥 **Entrenamiento Funcional (Agilidad & Cardio):**
+* **Bloque 1 (Tabata 4 min):** Desplantes alternados dinámicos con salto (Jumping Lunges).
+* **Bloque 2 (Coordinación):** 4 series de Escaladores de montaña (*Mountain Climbers*) a ritmo constante de 45 segundos.
+* **Bloque 3 (Fuerza de Tren Inferior):** Sentadillas sumo con pulso bajo para fortalecer abductores y giros.""",
     },
     "timba": {
         "canciones": [
             "Ese Soy Yo - El Niño y la Verdad (~105 BPM)",
             "Me Dicen Cuba - Alexander Abreu (~102 BPM)",
         ],
-        "rutina": (
-            "🔥 **Sugerencia de Entrenamiento:** 15 min de marcado contra-clave"
-            " y disociación de hombros y cadera a contratiempo."
-        ),
+        "rutina": """🔥 **Entrenamiento Funcional (Polirritmia & Resistencia):**
+* **Bloque 1 (Tabata 4 min):** Sentadillas con salto lateral y cambio de peso rápido.
+* **Bloque 2 (Core & Oblicuos):** 4 series de Crunches bicicleta (*Bicycle Crunches*) a contratiempo.
+* **Bloque 3 (Potencia):** 4 series de sentadillas libres con peso corporal a velocidad explosiva.""",
     },
 }
 
@@ -518,7 +530,7 @@ with tabs[2]:
   st.success("✨ El modelo RandomForest se encuentra activo en memoria.")
   st.json({
       "Algoritmo": "RandomForestClassifier",
-      "Estimadores": 300,
+      "Estimadores": 400,
       "Clases Soportadas": list(modelo.classes_),
   })
 
@@ -574,7 +586,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           rutina_entrenamiento = (
               CATALOGO_ENTRENAMIENTO[genero_key]["rutina"]
               if genero_key
-              else "🔥 **Sugerencia de Entrenamiento:** 15 min de acondicionamiento físico general adaptado al ritmo."
+              else "🔥 **Sugerencia de Entrenamiento:** Rutina general de acondicionamiento físico."
           )
 
           reply = f"""🎵 **Pista Analizada:** **{features_extraidas['cancion_formateada']}**
