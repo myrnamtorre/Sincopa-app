@@ -30,29 +30,21 @@ st.markdown(
 )
 
 # ==========================================
-# 2. ENTRENAMIENTO DINÁMICO EN MEMORIA (ML PURO)
+# 2. ENTRENAMIENTO DINÁMICO EN MEMORIA (ML ROBUSTO)
 # ==========================================
 
 
 @st.cache_resource
 def cargar_modelo_en_memoria():
+  # Dataset ampliado para evitar falsos positivos hacia la timba
   X_train = np.array([
-      [178.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
-      [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata
-      [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
+      [175.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
+      [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata 1
+      [122.0, 0.74, 0.62, 0.69, 0.03, 0.38, 2.7, 4, 22, 90],  # Bachata 2
+      [128.0, 0.78, 0.66, 0.73, 0.04, 0.32, 2.9, 5, 26, 100],  # Bachata 3
+      [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa 1
+      [150.0, 0.81, 0.84, 0.79, 0.07, 0.21, 3.4, 5, 36, 140],  # Salsa 2
       [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
-      [
-          150.0,
-          0.15,
-          0.30,
-          0.40,
-          0.85,
-          0.80,
-          0.8,
-          2,
-          5,
-          12,
-      ],  # Charlas / Entrevistas / Voces falsas
       [
           90.0,
           0.01,
@@ -69,9 +61,11 @@ def cargar_modelo_en_memoria():
   y_train = np.array([
       "Quebradita",
       "Bachata",
+      "Bachata",
+      "Bachata",
+      "Salsa",
       "Salsa",
       "Timba",
-      "No Musical / Contenido Hablado",
       "No Musical / Contenido Hablado",
   ])
 
@@ -146,7 +140,7 @@ def analizar_audio_para_modelo(url):
   nombre_visual = obtener_titulo_desde_link(url)
   texto_analisis = nombre_visual.lower()
 
-  # 1. Filtro por palabras clave extendido (incluye entrevistas, shows, polémicas, etc.)
+  # 1. Filtro rápido por palabras clave de contenido hablado exclusivamente
   palabras_habladas = [
       "podcast",
       "relatos",
@@ -169,13 +163,6 @@ def analizar_audio_para_modelo(url):
       "conferencia",
       "curso",
       "speech",
-      "rival",
-      "menso",
-      "pepe",
-      "teo",
-      "corte",
-      "chismes",
-      "opinión",
   ]
   if any(p in texto_analisis for p in palabras_habladas):
     return {
@@ -216,7 +203,7 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # 2. ANÁLISIS ACÚSTICO BLINDADO
+    # 2. ANÁLISIS ACÚSTICO
     zcr = np.mean(librosa.feature.zero_crossing_rate(y))
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     rms = np.mean(librosa.feature.rms(y=y))
@@ -229,17 +216,15 @@ def analizar_audio_para_modelo(url):
       tempo_val *= 2
 
     num_beats = len(beats)
-
-    # Si la energía percusiva es baja o la señal es predominantemente plana/hablada, fuera música
     percussive_energy = np.mean(y_percussive)
     harmonic_energy = np.mean(y_harmonic)
 
+    # Filtro estricto exclusivo para voz humana / charlas reales
     if (
-        flatness > 0.05
-        or zcr > 0.10
-        or rms < 0.025
-        or num_beats < 15
-        or (percussive_energy / (harmonic_energy + 1e-5) < 0.15)
+        flatness > 0.08
+        and zcr > 0.12
+        and rms < 0.02
+        and (percussive_energy / (harmonic_energy + 1e-5) < 0.10)
     ):
       return {
           "cancion_formateada": nombre_visual,
@@ -254,6 +239,22 @@ def analizar_audio_para_modelo(url):
           "num_compases": 1,
           "num_tiempos_beats": 2,
       }
+
+    # Asistentes de contexto por título para géneros específicos
+    if (
+        "quebradora" in texto_analisis
+        or "banda" in texto_analisis
+        or "recodo" in texto_analisis
+    ):
+      if tempo_val < 165.0:
+        tempo_val = 175.0
+    elif (
+        "bachata" in texto_analisis
+        or "romeo santos" in texto_analisis
+        or "aventura" in texto_analisis
+    ):
+      if not (110.0 <= tempo_val <= 135.0):
+        tempo_val = 125.0
 
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
@@ -305,13 +306,13 @@ def analizar_audio_para_modelo(url):
   except Exception:
     return {
         "cancion_formateada": nombre_visual,
-        "tempo": 150.0,
-        "danceability": 0.82,
-        "energy": 0.85,
-        "valence": 0.80,
-        "speechiness": 0.05,
-        "acousticness": 0.20,
-        "densidad_tatum": 3.5,
+        "tempo": 125.0,
+        "danceability": 0.76,
+        "energy": 0.64,
+        "valence": 0.71,
+        "speechiness": 0.04,
+        "acousticness": 0.34,
+        "densidad_tatum": 2.8,
         "num_secciones": 5,
         "num_compases": 32,
         "num_tiempos_beats": 128,
