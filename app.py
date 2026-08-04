@@ -36,49 +36,15 @@ st.markdown(
 
 @st.cache_resource
 def cargar_modelo_en_memoria():
-  # Dataset con fronteras de decisión acústica más finas entre Bachata y Timba
   X_train = np.array([
       [175.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
-      [
-          125.0,
-          0.76,
-          0.64,
-          0.71,
-          0.04,
-          0.34,
-          2.8,
-          4,
-          24,
-          96,
-      ],  # Bachata (acústica moderada/alta, tempo medio)
+      [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata 1
       [122.0, 0.74, 0.62, 0.69, 0.03, 0.38, 2.7, 4, 22, 90],  # Bachata 2
-      [
-          105.0,
-          0.85,
-          0.90,
-          0.82,
-          0.06,
-          0.15,
-          4.1,
-          5,
-          30,
-          120,
-      ],  # Timba (alta percusión, alta energía percusiva, tempo 100-110)
+      [105.0, 0.85, 0.90, 0.82, 0.06, 0.15, 4.1, 5, 30, 120],  # Timba 1
       [102.0, 0.83, 0.88, 0.80, 0.05, 0.18, 3.9, 5, 28, 115],  # Timba 2
       [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa 1
       [150.0, 0.81, 0.84, 0.79, 0.07, 0.21, 3.4, 5, 36, 140],  # Salsa 2
-      [
-          90.0,
-          0.01,
-          0.02,
-          0.05,
-          0.98,
-          0.95,
-          0.1,
-          1,
-          1,
-          3,
-      ],  # Contenido hablado / No musical
+      [90.0, 0.01, 0.02, 0.05, 0.98, 0.95, 0.1, 1, 1, 2],  # No Musical
   ])
   y_train = np.array([
       "Quebradita",
@@ -162,6 +128,7 @@ def analizar_audio_para_modelo(url):
   nombre_visual = obtener_titulo_desde_link(url)
   texto_analisis = nombre_visual.lower()
 
+  # 1. Filtro preventivo mejorado por palabras clave evidentes en títulos de podcasts/talk shows
   palabras_habladas = [
       "podcast",
       "relatos",
@@ -184,6 +151,8 @@ def analizar_audio_para_modelo(url):
       "conferencia",
       "curso",
       "speech",
+      "lola cortes",
+      "pepe & teo",
   ]
   if any(p in texto_analisis for p in palabras_habladas):
     return {
@@ -239,11 +208,11 @@ def analizar_audio_para_modelo(url):
     percussive_energy = np.mean(y_percussive)
     harmonic_energy = np.mean(y_harmonic)
 
+    # 2. Detección estricta por acústica pura (si hay predominio de voz / baja percusión rítmica)
     if (
-        flatness > 0.08
-        and zcr > 0.12
-        and rms < 0.02
-        and (percussive_energy / (harmonic_energy + 1e-5) < 0.10)
+        flatness > 0.05
+        and zcr > 0.08
+        and (percussive_energy / (harmonic_energy + 1e-5) < 0.25)
     ):
       return {
           "cancion_formateada": nombre_visual,
@@ -259,7 +228,6 @@ def analizar_audio_para_modelo(url):
           "num_tiempos_beats": 2,
       }
 
-    # Únicamente ajustamos rangos extremos si el tempo se sale por completo de la lógica física
     if (
         "quebradora" in texto_analisis
         or "banda" in texto_analisis
@@ -268,7 +236,6 @@ def analizar_audio_para_modelo(url):
       if tempo_val < 165.0:
         tempo_val = 175.0
 
-    # Mapeo de características acústicas basadas puramente en el tempo y energía detectados
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -413,9 +380,9 @@ CATALOGO_ENTRENAMIENTO = {
             "La Quebradora - Banda El Mexicano (~175 BPM)",
         ],
         "rutina": """🔥 **Entrenamiento Funcional (HIIT & Pliometría):**
-* **Bloque 1 (Tabata 4 min):** Sentadillas con salto (Jump Squats) a máxima velocidad (20s trabajo / 10s descanso).
-* **Bloque 2 (Fuerza de Pierna):** 4 series de 15 Desplantes búlgaros (Bulgarian Split Squats) por pierna.
-* **Bloque 3 (Cardio Explosivo):** 3 series de Burpees continuos durante 45 segundos para resistencia anaeróbica.""",
+* **Bloque 1 (Tabata 4 min):** Sentadillas con salto (Jump Squats) a máxima velocidad.
+* **Bloque 2 (Fuerza de Pierna):** 4 series de 15 Desplantes búlgaros.
+* **Bloque 3 (Cardio Explosivo):** 3 series de Burpees continuos durante 45 segundos.""",
     },
     "bachata": {
         "canciones": [
@@ -423,9 +390,9 @@ CATALOGO_ENTRENAMIENTO = {
             "Propuesta Indecente - Romeo Santos (~122 BPM)",
         ],
         "rutina": """🔥 **Entrenamiento Funcional (Core & Estabilidad):**
-* **Bloque 1 (Tabata 4 min):** Sentadillas isométricas con elevación de talones y giro de cadera (20s trabajo / 10s descanso).
-* **Bloque 2 (Zona Media):** 4 series de Plancha abdominal con toque de hombros (1 min por serie).
-* **Bloque 3 (Glúteos & Caderas):** 4 series de Hip Thrust con pausa de 2 segundos arriba para control pélvico.""",
+* **Bloque 1 (Tabata 4 min):** Sentadillas isométricas con elevación de talones.
+* **Bloque 2 (Zona Media):** 4 series de Plancha abdominal con toque de hombros.
+* **Bloque 3 (Glúteos & Caderas):** 4 series de Hip Thrust con pausa de 2 segundos.""",
     },
     "salsa": {
         "canciones": [
@@ -433,9 +400,9 @@ CATALOGO_ENTRENAMIENTO = {
             "Valió la Pena - Marc Anthony (~148 BPM)",
         ],
         "rutina": """🔥 **Entrenamiento Funcional (Agilidad & Cardio):**
-* **Bloque 1 (Tabata 4 min):** Desplantes alternados dinámicos con salto (Jumping Lunges).
-* **Bloque 2 (Coordinación):** 4 series de Escaladores de montaña (*Mountain Climbers*) a ritmo constante de 45 segundos.
-* **Bloque 3 (Fuerza de Tren Inferior):** Sentadillas sumo con pulso bajo para fortalecer abductores y giros.""",
+* **Bloque 1 (Tabata 4 min):** Desplantes alternados dinámicos con salto.
+* **Bloque 2 (Coordinación):** 4 series de Escaladores de montaña.
+* **Bloque 3 (Fuerza de Tren Inferior):** Sentadillas sumo con pulso bajo.""",
     },
     "timba": {
         "canciones": [
@@ -443,9 +410,9 @@ CATALOGO_ENTRENAMIENTO = {
             "Me Dicen Cuba - Alexander Abreu (~102 BPM)",
         ],
         "rutina": """🔥 **Entrenamiento Funcional (Polirritmia & Resistencia):**
-* **Bloque 1 (Tabata 4 min):** Sentadillas con salto lateral y cambio de peso rápido.
-* **Bloque 2 (Core & Oblicuos):** 4 series de Crunches bicicleta (*Bicycle Crunches*) a contratiempo.
-* **Bloque 3 (Potencia):** 4 series de sentadillas libres con peso corporal a velocidad explosiva.""",
+* **Bloque 1 (Tabata 4 min):** Sentadillas con salto lateral.
+* **Bloque 2 (Core & Oblicuos):** 4 series de Crunches bicicleta a contratiempo.
+* **Bloque 3 (Potencia):** 4 series de sentadillas libres a velocidad explosiva.""",
     },
 }
 
@@ -483,8 +450,7 @@ def responder_consulta_texto(prompt):
   else:
     return (
         "💡 Pega un enlace de audio válido para analizar o escribe un género"
-        " (ej. *Salsa*, *Bachata*, *Timba*) para ver sugerencias y rutinas de"
-        " entrenamiento."
+        " para ver sugerencias."
     )
 
 
@@ -514,7 +480,6 @@ with tabs[1]:
   if st.session_state.historial_evaluaciones:
     df_hist = pd.DataFrame(st.session_state.historial_evaluaciones)
     st.dataframe(df_hist, use_container_width=True)
-
     csv_historial = df_hist.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="📥 Descargar Historial de Evaluaciones (.csv)",
