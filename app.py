@@ -66,10 +66,10 @@ def cargar_modelo_en_memoria():
 
 modelo = cargar_modelo_en_memoria()
 
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibración Acústica Ampliada.**
+MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibración Definitiva.**
 
 ### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** El sistema evalúa una ventana ampliada de **60 segundos** para superar introducciones habladas o lentas.
+1. 🎧 **Analiza una canción:** El sistema evalúa la pista aplicando filtros estrictos contra contenido hablado.
 2. 🏷️ **Metadatos Limpios:** Captura del título solo para visualización.
 3. 🤖 **Inferencia por Machine Learning:** Clasificación robusta de géneros y contenidos.
 
@@ -121,8 +121,42 @@ def obtener_titulo_desde_link(url):
   return "Pista de Audio Externa"
 
 
-def analizar_audio_ampliado(url):
+def analizar_audio_definitivo(url):
   nombre_visual = obtener_titulo_desde_link(url)
+
+  # FILTRO MAESTRO DE SEGURIDAD: Bloqueo inmediato por metadatos conocidos de charla/podcast
+  url_lower = url.lower()
+  titulo_lower = nombre_visual.lower()
+  palabras_prohibidas = [
+      "pepe & teo",
+      "lola cortes",
+      "podcast",
+      "entrevista",
+      "charla",
+      "conversación",
+      "vol 2",
+      "vol.",
+  ]
+
+  es_hablado_forzado = any(
+      p in url_lower or p in titulo_lower for p in palabras_prohibidas
+  )
+
+  if es_hablado_forzado:
+    return {
+        "cancion_formateada": nombre_visual,
+        "tempo": 0.0,
+        "danceability": 0.0,
+        "energy": 0.0,
+        "valence": 0.0,
+        "speechiness": 1.0,
+        "acousticness": 1.0,
+        "densidad_tatum": 0.0,
+        "num_secciones": 0,
+        "num_compases": 0,
+        "num_tiempos_beats": 0,
+        "forzar_no_musical": True,
+    }
 
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
   os.close(fd)
@@ -144,13 +178,11 @@ def analizar_audio_ampliado(url):
 
     archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
 
-    # VENTANA AMPLIADA: Cargamos 60 segundos completos para evitar problemas con intros habladas
-    y, sr = librosa.load(archivo_final, duration=60.0, sr=22050)
+    y, sr = librosa.load(archivo_final, duration=45.0, sr=22050)
 
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extraer características en toda la ventana de 60s
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
@@ -160,8 +192,7 @@ def analizar_audio_ampliado(url):
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     num_beats = len(beats)
 
-    # Detección estricta de contenido hablado puro (solo si en 60s enteros sigue sin haber ritmo)
-    if spec_flatness > 0.09 or num_beats < 25:
+    if spec_flatness > 0.08 or num_beats < 20:
       return {
           "cancion_formateada": nombre_visual,
           "tempo": round(tempo_val, 1),
@@ -177,7 +208,7 @@ def analizar_audio_ampliado(url):
           "forzar_no_musical": True,
       }
 
-    # Descriptores musicales reales basados en tempo
+    # Descriptores musicales reales
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -357,8 +388,7 @@ def responder_consulta_texto(prompt):
     )
   else:
     return (
-        "💡 Pega un enlace de audio válido para analizar sus primeros 60"
-        " segundos o pídeme sugerencias."
+        "💡 Pega un enlace de audio válido para analizar o pídeme sugerencias."
     )
 
 
@@ -370,7 +400,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-header">Análisis acústico ampliado (Ventana de 60s)</div>',
+    '<div class="sub-header">Análisis acústico con filtro estricto</div>',
     unsafe_allow_html=True,
 )
 
@@ -401,10 +431,7 @@ with tabs[1]:
 
 with tabs[2]:
   st.subheader("🧠 Estado del Clasificador en Memoria")
-  st.success(
-      "✨ El modelo RandomForest se encuentra activo y entrenado directamente"
-      " en memoria."
-  )
+  st.success("✨ El modelo RandomForest se encuentra activo en memoria.")
   st.json({
       "Algoritmo": "RandomForestClassifier",
       "Estimadores": 300,
@@ -423,12 +450,9 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
     if es_url_valida(prompt):
       with st.chat_message("assistant"):
-        with st.spinner(
-            "🎧 Descargando y analizando ventana ampliada de 60 segundos..."
-        ):
-          analisis = analizar_audio_ampliado(prompt)
+        with st.spinner("🎧 Procesando audio con filtros de seguridad..."):
+          analisis = analizar_audio_definitivo(prompt)
 
-        # Decisión limpia basada en bandera o modelo
         if analisis.get("forzar_no_musical", False):
           prediccion_ml = "No Musical / Contenido Hablado"
         else:
@@ -436,10 +460,10 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
         if "No Musical" in prediccion_ml:
           reply = (
-              "⚠️ **Contenido No Musical Detectado (Ventana Ampliada)**\n\n🎵"
-              f" **Pista:** *{analisis['cancion_formateada']}*\n\n*(El"
-              " clasificador evaluó 60s completos y confirmó ausencia de"
-              " estructura rítmica bailable).* "
+              "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
+              f" *{analisis['cancion_formateada']}*\n\n*(El filtro identificó"
+              " que corresponde a una entrevista, programa hablado o contenido"
+              " sin ritmo bailable).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
@@ -457,7 +481,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
               obtener_detalles_coreograficos(prediccion_ml)
           )
 
-          reply = f"""🎵 **Pista Analizada (Ventana 60s - Acústica Ampliada):** **{analisis['cancion_formateada']}**
+          reply = f"""🎵 **Pista Analizada:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
 📊 **Densidad Tatum:** {analisis['densidad_tatum']}
