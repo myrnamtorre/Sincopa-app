@@ -66,12 +66,12 @@ def cargar_modelo_en_memoria():
 
 modelo = cargar_modelo_en_memoria()
 
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Filtro Acústico Anti-Voz.**
+MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Separación Armónico-Percusiva.**
 
 ### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** El sistema evalúa armónicos, planitud y densidad percusiva mediante Librosa.
+1. 🎧 **Analiza una canción:** El sistema separa la señal en componentes armónicos y percusivos reales.
 2. 🏷️ **Metadatos Limpios:** Captura del título solo para visualización.
-3. 🤖 **Inferencia por Machine Learning:** Clasificación robusta basada en propiedades físicas del audio.
+3. 🤖 **Inferencia por Machine Learning:** Clasificación robusta basada en la estructura física del audio.
 
 ---
 💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
@@ -121,7 +121,7 @@ def obtener_titulo_desde_link(url):
   return "Pista de Audio Externa"
 
 
-def analizar_audio_antivoz(url):
+def analizar_audio_con_hpss(url):
   nombre_visual = obtener_titulo_desde_link(url)
 
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
@@ -144,30 +144,49 @@ def analizar_audio_antivoz(url):
 
     archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
 
-    # Cargamos 45 segundos de audio
     y, sr = librosa.load(archivo_final, duration=45.0, sr=22050)
 
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Métricas acústicas avanzadas para detectar voz hablada pura
-    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    # SEPARACIÓN ARMÓNICO-PERCUSIVA (HPSS)
+    # Esto aísla por completo la percusión real de la voz/armónicos
+    y_harmonic, y_percussive = librosa.effects.hpss(y)
+
+    # Energía de la percusión frente a la armónica
+    energia_percusiva = np.sum(y_percussive**2)
+    energia_ harmonica = np.sum(y_harmonic**2)
+    proporcion_percubase = (
+        energia_percusiva / (energia_ harmonica + energia_percusiva + 1e-6)
+    )
+
+    # Si la energía percusiva es extremadamente baja, es charla/voz y se rechaza de inmediato
+    if proporcion_percubase < 0.035:
+      return {
+          "cancion_formateada": nombre_visual,
+          "tempo": 0.0,
+          "danceability": 0.01,
+          "energy": 0.01,
+          "valence": 0.10,
+          "speechiness": 0.99,
+          "acousticness": 0.90,
+          "densidad_tatum": 0.1,
+          "num_secciones": 1,
+          "num_compases": 1,
+          "num_tiempos_beats": 1,
+          "forzar_no_musical": True,
+      }
+
+    # Si pasa el filtro percusivo, procedemos a calcular el tempo real sobre la pista percusiva limpia
+    onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
     if tempo_val < 60:
       tempo_val *= 2
 
-    spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
-    spec_rolloff = np.mean(
-        librosa.feature.spectral_rolloff(y=y, sr=sr, roll_percent=0.85)
-    )
     num_beats = len(beats)
 
-    # NUEVO FILTRO ACÚSTICO ESTRICTO:
-    # La voz humana hablada genera centros armónicos con un rolloff y flatness muy acotados,
-    # y carece de la continuidad rítmica real de una percusión bailable (aunque Librosa intente forzar beats).
-    # Si la energía armónica está muy concentrada en frecuencias de voz (rolloff bajo/medio) y hay baja densidad real:
-    if spec_flatness > 0.07 or num_beats < 22 or spec_rolloff < 2200:
+    if num_beats < 10:
       return {
           "cancion_formateada": nombre_visual,
           "tempo": round(tempo_val, 1),
@@ -183,7 +202,7 @@ def analizar_audio_antivoz(url):
           "forzar_no_musical": True,
       }
 
-    # Descriptores musicales reales si pasa la prueba acústica
+    # Descriptores musicales reales
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -375,7 +394,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-header">Análisis acústico con filtro anti-voz puro</div>',
+    '<div class="sub-header">Análisis acústico con separación HPSS</div>',
     unsafe_allow_html=True,
 )
 
@@ -425,10 +444,8 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
     if es_url_valida(prompt):
       with st.chat_message("assistant"):
-        with st.spinner(
-            "🎧 Ejecutando análisis espectral y filtro anti-voz..."
-        ):
-          analisis = analizar_audio_antivoz(prompt)
+        with st.spinner("🎧 Separando componentes armónicos y percusivos..."):
+          analisis = analizar_audio_con_hpss(prompt)
 
         if analisis.get("forzar_no_musical", False):
           prediccion_ml = "No Musical / Contenido Hablado"
@@ -439,8 +456,8 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
               f" *{analisis['cancion_formateada']}*\n\n*(El análisis"
-              " espectral detectó perfil de voz hablada pura sin soporte"
-              " rítmico bailable).* "
+              " armónico-percusivo confirmó que no existe una base de"
+              " percusión rítmica bailable).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
