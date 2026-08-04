@@ -8,7 +8,6 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 import streamlit as st
 import yt_dlp
 
@@ -33,66 +32,51 @@ st.markdown(
 )
 
 # ==========================================
-# 2. CARGA DEL MODELO ML & ESTADOS DE SESIÓN
+# 2. ENTRENAMIENTO DINÁMICO EN MEMORIA (ML PURO)
 # ==========================================
 
 
-def reentrenar_modelo_con_maestro():
-  try:
-    X_train = np.array([
-        [178.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
-        [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata
-        [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
-        [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
-        [
-            110.0,
-            0.15,
-            0.10,
-            0.30,
-            0.85,
-            0.90,
-            1.0,
-            2,
-            4,
-            10,
-        ],  # Contenido Hablado / Voz Pura
-    ])
-    y_train = np.array([
-        "Quebradita",
-        "Bachata",
-        "Salsa",
-        "Timba",
-        "No Musical / Contenido Hablado",
-    ])
-
-    modelo_optimo = RandomForestClassifier(
-        n_estimators=300,
-        max_depth=12,
-        min_samples_split=3,
-        random_state=42,
-        class_weight="balanced",
-    )
-    modelo_optimo.fit(X_train, y_train)
-
-    nombre_modelo = "modelo_sincopa_rf.joblib"
-    joblib.dump(modelo_optimo, nombre_modelo)
-    return True, nombre_modelo
-  except Exception as e:
-    return False, str(e)
-
-
 @st.cache_resource
-def cargar_modelo():
-  nombre_modelo = "modelo_sincopa_rf.joblib"
-  if not os.path.exists(nombre_modelo):
-    reentrenar_modelo_con_maestro()
-  try:
-    return joblib.load(nombre_modelo)
-  except Exception:
-    return None
+def cargar_modelo_en_memoria():
+  # Dataset de entrenamiento robusto con separación estricta de voz y géneros bailables
+  X_train = np.array([
+      [178.0, 0.89, 0.92, 0.86, 0.05, 0.12, 4.3, 5, 32, 128],  # Quebradita
+      [125.0, 0.76, 0.64, 0.71, 0.04, 0.34, 2.8, 4, 24, 96],  # Bachata
+      [160.0, 0.83, 0.86, 0.81, 0.08, 0.19, 3.6, 6, 40, 160],  # Salsa
+      [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
+      [
+          110.0,
+          0.05,
+          0.05,
+          0.20,
+          0.95,
+          0.85,
+          0.5,
+          2,
+          4,
+          10,
+      ],  # Contenido Hablado / Voz Pura (Alta speechiness, baja energía)
+  ])
+  y_train = np.array([
+      "Quebradita",
+      "Bachata",
+      "Salsa",
+      "Timba",
+      "No Musical / Contenido Hablado",
+  ])
+
+  modelo_optimo = RandomForestClassifier(
+      n_estimators=300,
+      max_depth=12,
+      min_samples_split=3,
+      random_state=42,
+      class_weight="balanced",
+  )
+  modelo_optimo.fit(X_train, y_train)
+  return modelo_optimo
 
 
-modelo = cargar_modelo()
+modelo = cargar_modelo_en_memoria()
 
 MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibración Acústica Pura.**
 
@@ -177,7 +161,7 @@ def analizar_audio_primeros_30s(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extracción de características puramente acústicas con Librosa
+    # Extracción de características acústicas con Librosa
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
@@ -185,9 +169,24 @@ def analizar_audio_primeros_30s(url):
       tempo_val *= 2
 
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
-    zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
 
-    # Estimación de descriptores acústicos
+    # Detección estricta de contenido hablado basada en características espectrales puras
+    if spec_flatness > 0.08 or len(beats) < 15:
+      return {
+          "cancion_formateada": nombre_visual,
+          "tempo": round(tempo_val, 1),
+          "danceability": 0.05,
+          "energy": 0.05,
+          "valence": 0.20,
+          "speechiness": 0.95,
+          "acousticness": 0.85,
+          "densidad_tatum": 0.5,
+          "num_secciones": 2,
+          "num_compases": 4,
+          "num_tiempos_beats": max(int(len(beats)), 5),
+      }
+
+    # Asignación para pistas musicales reales
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -221,20 +220,13 @@ def analizar_audio_primeros_30s(url):
           3.5,
       )
 
-    # Detección acústica pura de voz/contenido hablado basada en planitud y escasez de beats
-    speechiness_val = 0.05
-    if spec_flatness > 0.12 and len(beats) < 20:
-      speechiness_val = 0.85
-      danceability = 0.15
-      energy = 0.10
-
     return {
         "cancion_formateada": nombre_visual,
         "tempo": round(tempo_val, 1),
         "danceability": danceability,
         "energy": energy,
         "valence": valence,
-        "speechiness": speechiness_val,
+        "speechiness": 0.05,
         "acousticness": acousticness,
         "densidad_tatum": densidad,
         "num_secciones": int(np.random.randint(4, 8)),
@@ -260,27 +252,23 @@ def analizar_audio_primeros_30s(url):
 
 def clasificar_genero_por_audio(features):
   global modelo
-
-  if modelo is not None:
-    try:
-      X_input = np.array([[
-          features["tempo"],
-          features["danceability"],
-          features["energy"],
-          features["valence"],
-          features["speechiness"],
-          features["acousticness"],
-          features["densidad_tatum"],
-          features["num_secciones"],
-          features["num_compases"],
-          features["num_tiempos_beats"],
-      ]])
-      pred = modelo.predict(X_input)
-      return str(pred[0])
-    except Exception as e:
-      return f"Error en Predicción del Modelo: {str(e)}"
-
-  return "Error: No se encontró el archivo .joblib del modelo."
+  try:
+    X_input = np.array([[
+        features["tempo"],
+        features["danceability"],
+        features["energy"],
+        features["valence"],
+        features["speechiness"],
+        features["acousticness"],
+        features["densidad_tatum"],
+        features["num_secciones"],
+        features["num_compases"],
+        features["num_tiempos_beats"],
+    ]])
+    pred = modelo.predict(X_input)
+    return str(pred[0])
+  except Exception as e:
+    return f"Error en Predicción del Modelo: {str(e)}"
 
 
 def obtener_detalles_coreograficos(genero):
@@ -395,7 +383,7 @@ st.markdown(
 )
 
 tabs = st.tabs(
-    ["💬 Chat Asistente", "📊 Historial & Métricas", "⚙️ Entrenamiento & Calibración"]
+    ["💬 Chat Asistente", "📊 Historial & Métricas", "⚙️ Estado del Modelo"]
 )
 
 with tabs[0]:
@@ -420,30 +408,16 @@ with tabs[1]:
     st.info("Aún no se han evaluado canciones en esta sesión.")
 
 with tabs[2]:
-  st.subheader("🧠 Panel de Reentrenamiento y Ajuste del Modelo")
-  st.markdown("""
-    Aquí puedes disparar el reentrenamiento oficial utilizando `scikit-learn` para actualizar y sobrescribir el archivo `.joblib` en tu directorio.
-    """)
-
-  col1, col2 = st.columns(2)
-  with col1:
-    st.info(
-        "📊 **Estado del Dataset:**\n• Se procesará el bosque aleatorio (Random"
-        " Forest) integrando la clase de contenido hablado."
-    )
-  with col2:
-    if st.button("🚀 Reentrenar y Sobrescribir .joblib", key="btn_reentrenar"):
-      with st.spinner("Entrenando clasificador y exportando archivo..."):
-        exito, resultado = reentrenar_modelo_con_maestro()
-        time.sleep(1.0)
-
-      if exito:
-        st.success(
-            f"✨ ¡Modelo reentrenado con éxito! Guardado como: `{resultado}`."
-            " Recarga la página para aplicarlo."
-        )
-      else:
-        st.error(f"❌ Ocurrió un error al entrenar: {resultado}")
+  st.subheader("🧠 Estado del Clasificador en Memoria")
+  st.success(
+      "✨ El modelo RandomForest se encuentra activo y entrenado directamente"
+      " en memoria con soporte para contenido hablado y géneros musicales."
+  )
+  st.json({
+      "Algoritmo": "RandomForestClassifier",
+      "Estimadores": 300,
+      "Clases Soportadas": list(modelo.classes_),
+  })
 
 # ==========================================
 # 5. ENTRADA DEL CHAT
@@ -487,15 +461,6 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
               obtener_detalles_coreograficos(prediccion_ml)
           )
 
-          entrenamiento_sugerido = ""
-          if tempo_val > 170.0:
-            entrenamiento_sugerido = (
-                "\n\n💡 **Sugerencia de Entrenamiento:** *Este archivo presenta"
-                " un tempo elevado (>170 BPM) en sus primeros 30s. Puedes"
-                " actualizar tu modelo en la pestaña '⚙️ Entrenamiento &"
-                " Calibración' para calibrar el archivo `.joblib`.*"
-            )
-
           reply = f"""🎵 **Pista Analizada (Primeros 30s - Acústica Pura):** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
@@ -521,7 +486,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 ---
 
 ### 👗 Sugerencia de Vestuario:
-{vestuario_text}{entrenamiento_sugerido}
+{vestuario_text}
 """
           st.markdown(reply)
           st.session_state.messages.append(
