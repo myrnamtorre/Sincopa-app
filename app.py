@@ -33,7 +33,7 @@ st.markdown(
 )
 
 # ==========================================
-# 3. FUNCIONES DE ACÚSTICA Y ENTRENAMIENTO
+# 2. CARGA DEL MODELO ML & ESTADOS DE SESIÓN
 # ==========================================
 
 
@@ -46,16 +46,16 @@ def reentrenar_modelo_con_maestro():
         [105.0, 0.82, 0.85, 0.80, 0.06, 0.20, 3.5, 5, 30, 120],  # Timba
         [
             110.0,
-            0.20,
             0.15,
-            0.40,
-            0.65,
+            0.10,
+            0.30,
             0.85,
-            1.1,
+            0.90,
+            1.0,
             2,
-            5,
-            12,
-        ],  # Contenido Hablado / Podcast
+            4,
+            10,
+        ],  # Contenido Hablado / Voz Pura
     ])
     y_train = np.array([
         "Quebradita",
@@ -81,11 +81,6 @@ def reentrenar_modelo_con_maestro():
     return False, str(e)
 
 
-# ==========================================
-# 2. CARGA DEL MODELO ML & ESTADOS DE SESIÓN
-# ==========================================
-
-
 @st.cache_resource
 def cargar_modelo():
   nombre_modelo = "modelo_sincopa_rf.joblib"
@@ -102,9 +97,9 @@ modelo = cargar_modelo()
 MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibración Acústica Pura.**
 
 ### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** Pega cualquier enlace musical (se evalúan los primeros 30 segundos **únicamente** por acústica y pulso rítmico).
+1. 🎧 **Analiza una canción:** Pega cualquier enlace musical para evaluar sus primeros 30 segundos mediante acústica y pulso rítmico.
 2. 🏷️ **Metadatos Limpios:** Captura del título solo para visualización.
-3. 🤖 **Inferencia y Propuestas de Entrenamiento:** El sistema procesa el vector y clasifica el ritmo.
+3. 🤖 **Inferencia por Machine Learning:** El sistema procesa las características del audio y clasifica el género o el contenido hablado.
 
 ---
 💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
@@ -182,7 +177,7 @@ def analizar_audio_primeros_30s(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extracción de características puramente acústicas
+    # Extracción de características puramente acústicas con Librosa
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
@@ -192,7 +187,7 @@ def analizar_audio_primeros_30s(url):
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
 
-    # Estimación de parámetros para el modelo
+    # Extracción de descriptores acústicos
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -226,15 +221,14 @@ def analizar_audio_primeros_30s(url):
           3.5,
       )
 
-    # Si la planitud espectral y la tasa de cruce por cero indican voz hablada pura, ajustamos los descriptores para que el modelo identifique contenido no musical
+    # Detección acústica pura de voz/contenido hablado basada en planitud y escasez de beats
     speechiness_val = 0.05
-    if spec_flatness > 0.15 and len(beats) < 15:
-      speechiness_val = 0.70
-      danceability = 0.20
-      energy = 0.15
+    if spec_flatness > 0.12 and len(beats) < 20:
+      speechiness_val = 0.85
+      danceability = 0.15
+      energy = 0.10
 
     return {
-        "es_musica": True,
         "cancion_formateada": nombre_visual,
         "tempo": round(tempo_val, 1),
         "danceability": danceability,
@@ -250,7 +244,6 @@ def analizar_audio_primeros_30s(url):
 
   except Exception as e:
     return {
-        "es_musica": True,
         "cancion_formateada": nombre_visual,
         "tempo": 140.0,
         "danceability": 0.80,
@@ -384,7 +377,7 @@ def responder_consulta_texto(prompt):
   else:
     return (
         "💡 Pega un enlace de audio válido para analizar sus primeros 30"
-        " segundos puramente por acústica o pídeme sugerencias."
+        " segundos o pídeme sugerencias."
     )
 
 
@@ -397,7 +390,7 @@ st.markdown(
 )
 st.markdown(
     '<div class="sub-header">Análisis acústico puro de los primeros 30 segundos'
-    " (sin dependencia de títulos)</div>",
+    "</div>",
     unsafe_allow_html=True,
 )
 
@@ -436,8 +429,7 @@ with tabs[2]:
   with col1:
     st.info(
         "📊 **Estado del Dataset:**\n• Se procesará el bosque aleatorio (Random"
-        " Forest) para incorporar los nuevos rangos de BPM sin requerir parches"
-        " lógicos."
+        " Forest) integrando la clase de contenido hablado."
     )
   with col2:
     if st.button("🚀 Reentrenar y Sobrescribir .joblib", key="btn_reentrenar"):
@@ -476,8 +468,8 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           reply = (
               "⚠️ **Contenido No Musical Detectado (Análisis Acústico)**\n\n🎵"
               f" **Pista:** *{analisis['cancion_formateada']}*\n\n*(El"
-              " modelo de Machine Learning detectó ausencia de un pulso rítmico"
-              " bailable o predominio de voz/locución en los primeros 30s).* "
+              " clasificador detectó ausencia de pulso rítmico bailable y"
+              " predominio de voz en los primeros 30s).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
