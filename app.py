@@ -131,6 +131,46 @@ def obtener_titulo_desde_link(url):
 
 def analizar_audio_para_modelo(url):
   nombre_visual = obtener_titulo_desde_link(url)
+  texto_analisis = nombre_visual.lower()
+
+  # 1. Filtro rápido por palabras clave en el título
+  palabras_habladas = [
+      "podcast",
+      "relatos",
+      "relato",
+      "historias",
+      "historia",
+      "entrevista",
+      "conversación",
+      "talk",
+      "comedy",
+      "reflexión",
+      "leyendas",
+      "miedo",
+      "terror",
+      "noche",
+      "show",
+      "programa",
+      "spotify",
+      "tutorial",
+      "conferencia",
+      "curso",
+      "speech",
+  ]
+  if any(p in texto_analisis for p in palabras_habladas):
+    return {
+        "cancion_formateada": nombre_visual,
+        "tempo": 90.0,
+        "danceability": 0.01,
+        "energy": 0.02,
+        "valence": 0.05,
+        "speechiness": 0.98,
+        "acousticness": 0.95,
+        "densidad_tatum": 0.1,
+        "num_secciones": 1,
+        "num_compases": 1,
+        "num_tiempos_beats": 2,
+    }
 
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
   os.close(fd)
@@ -156,9 +196,11 @@ def analizar_audio_para_modelo(url):
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
-    # Extracción estricta de señales físicas puras
+    # 2. ANÁLISIS ACÚSTICO ESTRICTO DE LA SEÑAL REAL
+    # Medimos la planitud espectral y la tasa de cruces por cero de la voz vs música
     zcr = np.mean(librosa.feature.zero_crossing_rate(y))
     flatness = np.mean(librosa.feature.spectral_flatness(y=y))
+    rms = np.mean(librosa.feature.rms(y=y))
 
     y_harmonic, y_percussive = librosa.effects.hpss(y)
     onset_env = librosa.onset.onset_strength(y=y_percussive, sr=sr)
@@ -169,8 +211,8 @@ def analizar_audio_para_modelo(url):
 
     num_beats = len(beats)
 
-    # Si la señal muestra características de voz hablada, podcast o ausencia de pulso bailable
-    if flatness > 0.12 or zcr > 0.15 or num_beats < 8:
+    # Si la señal muestra características físicas de voz hablada o audio no rítmico, lo bloqueamos aquí
+    if flatness > 0.08 or zcr > 0.12 or rms < 0.03 or num_beats < 10:
       return {
           "cancion_formateada": nombre_visual,
           "tempo": 90.0,
@@ -182,10 +224,9 @@ def analizar_audio_para_modelo(url):
           "densidad_tatum": 0.1,
           "num_secciones": 1,
           "num_compases": 1,
-          "num_tiempos_beats": max(num_beats, 2),
+          "num_tiempos_beats": 2,
       }
 
-    # Asignación de características según el tempo detectado para música
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -323,7 +364,6 @@ def obtener_detalles_coreograficos(genero):
   return pareja, grupo, solista, metrica, aprovechamiento, vestuario
 
 
-# Catálogo extendido con sugerencias de entrenamiento / calentamiento
 CATALOGO_ENTRENAMIENTO = {
     "quebradita": {
         "canciones": [
@@ -475,8 +515,8 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
               f" *{features_extraidas['cancion_formateada']}*\n\n*(El análisis"
-              " físico determinó que el audio corresponde a contenido hablado o"
-              " sin base rítmica bailable).* "
+              " acústico de la señal determinó que el audio no contiene una base"
+              " rítmica bailable).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
@@ -494,7 +534,6 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
               obtener_detalles_coreograficos(prediccion_ml)
           )
 
-          # Buscar sugerencia de entrenamiento asociada al género detectado
           genero_key = next(
               (
                   k
