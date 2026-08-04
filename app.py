@@ -64,7 +64,7 @@ MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Clasificación Inteligente por
 2. 🤖 **Inferencia por RandomForest:** El modelo clasifica el género de forma matemática.
 
 ---
-💡 *Pega un enlace de audio o escribe un género/artista para recibir sugerencias de entrenamiento.*"""
+💡 *Pega un enlace de audio o escribe un género/artista para recibir sugerencias de ejercicios y rutinas.*"""
 
 if "messages" not in st.session_state:
   st.session_state.messages = [{
@@ -145,12 +145,14 @@ def analizar_audio_para_modelo(url):
 
     y_harmonic, y_percussive = librosa.effects.hpss(y)
 
-    # FILTRO DURO: Aislar contenido no musical (charlas, podcasts, voz hablada)
     percussive_energy = float(np.mean(y_percussive))
     harmonic_energy = float(np.mean(y_harmonic))
 
-    if percussive_energy < 0.015 or (
-        percussive_energy / (harmonic_energy + 1e-5) < 0.15
+    # FILTRO ESTRICTO: Aislar contenido hablado / podcasts / charlas de YouTube
+    if (
+        flatness > 0.025
+        or zcr > 0.06
+        or (percussive_energy / (harmonic_energy + 1e-5) < 0.35)
     ):
       return {
           "cancion_formateada": nombre_visual,
@@ -321,9 +323,12 @@ CATALOGO_ENTRENAMIENTO = {
             "La Quebradora - Banda El Mexicano (~175 BPM)",
         ],
         "rutina": (
-            "🔥 **Sugerencia de Entrenamiento:** 15 min de saltos pliométricos"
-            " en intervalos de alta intensidad (HIIT) para resistencia de"
-            " piernas y botes."
+            "🔥 **Bloque de Ejercicios & HIIT (Fuerza Explosiva):**\n"
+            "• **Metodología Tabata:** 4 rondas (20 seg de trabajo / 10 seg de"
+            " descanso) de Sentadillas con Salto (Jump Squats) y Burpees.\n"
+            "• **Fortalecimiento:** 3 series de 15 elevaciones de talones"
+            " (calf raises) con peso corporal para proteger tobillos ante el"
+            " impacto de los botes."
         ),
     },
     "bachata": {
@@ -332,8 +337,12 @@ CATALOGO_ENTRENAMIENTO = {
             "Propuesta Indecente - Romeo Santos (~122 BPM)",
         ],
         "rutina": (
-            "🔥 **Sugerencia de Entrenamiento:** 15 min de isolaciones pélvicas"
-            " y control de peso en cada tiempo (1 al 4 con acento en el tap)."
+            "🔥 **Bloque de Ejercicios & HIIT (Control Pélvico y Core):**\n"
+            "• **Metodología Tabata:** 4 rondas (20 seg de trabajo / 10 seg de"
+            " descanso) de Plancha abdominal isométrica con rotación de cadera"
+            " y *Mountain Climbers* lentos.\n"
+            "• **Fortalecimiento:** 3 series de 15 repeticiones de puente de"
+            " glúteos unilateral para estabilidad en las marcaciones de cadera."
         ),
     },
     "salsa": {
@@ -342,8 +351,12 @@ CATALOGO_ENTRENAMIENTO = {
             "Valió la Pena - Marc Anthony (~148 BPM)",
         ],
         "rutina": (
-            "🔥 **Sugerencia de Entrenamiento:** 15 min de marcación rápida de"
-            " pasos libres (*shines*) y giros sencillos en eje vertical."
+            "🔥 **Bloque de Ejercicios & HIIT (Agilidad de Pies y Cardio):**\n"
+            "• **Metodología HIIT:** 5 series de 45 segundos de skipping alto en"
+            " el lugar y 15 segundos de descanso.\n"
+            "• **Fortalecimiento:** 3 series de desplantes (*lunges*)"
+            " dinámicos alternados para velocidad de desplazamiento y eje"
+            " vertical."
         ),
     },
     "timba": {
@@ -352,8 +365,12 @@ CATALOGO_ENTRENAMIENTO = {
             "Me Dicen Cuba - Alexander Abreu (~102 BPM)",
         ],
         "rutina": (
-            "🔥 **Sugerencia de Entrenamiento:** 15 min de marcado contra-clave"
-            " y disociación de hombros y cadera a contratiempo."
+            "🔥 **Bloque de Ejercicios & HIIT (Polirritmia y Coordinación):**\n"
+            "• **Metodología Tabata:** 4 rondas (20 seg de trabajo / 10 seg de"
+            " descanso) de Sentadillas sumo con toque de talón y saltos"
+            " laterales cruzados.\n"
+            "• **Fortalecimiento:** 3 series de planchas dinámicas tocando"
+            " hombros para disociación de tronco superior."
         ),
     },
 }
@@ -392,8 +409,8 @@ def responder_consulta_texto(prompt):
   else:
     return (
         "💡 Pega un enlace de audio válido para analizar o escribe un género"
-        " (ej. *Salsa*, *Bachata*, *Timba*) para ver sugerencias y rutinas de"
-        " entrenamiento."
+        " (ej. *Salsa*, *Bachata*, *Timba*) para ver sugerencias de ejercicios,"
+        " rutinas HIIT y Tabata."
     )
 
 
@@ -496,7 +513,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
             rutina_entrenamiento = (
                 CATALOGO_ENTRENAMIENTO[genero_key]["rutina"]
                 if genero_key
-                else "🔥 **Sugerencia de Entrenamiento:** 15 min de acondicionamiento físico general adaptado al ritmo."
+                else "🔥 **Bloque de Ejercicios & HIIT:**\n• **Metodología Tabata:** 4 rondas de acondicionamiento físico general adaptado al ritmo."
             )
 
             reply = f"""🎵 **Pista Analizada:** **{features_extraidas['cancion_formateada']}**
