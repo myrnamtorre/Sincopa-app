@@ -66,12 +66,12 @@ def cargar_modelo_en_memoria():
 
 modelo = cargar_modelo_en_memoria()
 
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Acústica 100% Pura.**
+MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Filtro Acústico Anti-Voz.**
 
 ### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** El sistema evalúa exclusivamente las propiedades del sonido descargado mediante Librosa.
-2. 🏷️ **Metadatos Limpios:** Captura del título solo para mostrarlo en pantalla.
-3. 🤖 **Inferencia por Machine Learning:** Clasificación basada en ritmo y energía real.
+1. 🎧 **Analiza una canción:** El sistema evalúa armónicos, planitud y densidad percusiva mediante Librosa.
+2. 🏷️ **Metadatos Limpios:** Captura del título solo para visualización.
+3. 🤖 **Inferencia por Machine Learning:** Clasificación robusta basada en propiedades físicas del audio.
 
 ---
 💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
@@ -121,7 +121,7 @@ def obtener_titulo_desde_link(url):
   return "Pista de Audio Externa"
 
 
-def analizar_audio_100_acustico(url):
+def analizar_audio_antivoz(url):
   nombre_visual = obtener_titulo_desde_link(url)
 
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
@@ -144,12 +144,13 @@ def analizar_audio_100_acustico(url):
 
     archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
 
-    # Carga de la ventana de audio para análisis puramente físico
+    # Cargamos 45 segundos de audio
     y, sr = librosa.load(archivo_final, duration=45.0, sr=22050)
 
     if os.path.exists(archivo_final):
       os.remove(archivo_final)
 
+    # Métricas acústicas avanzadas para detectar voz hablada pura
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr)
     tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
@@ -157,10 +158,16 @@ def analizar_audio_100_acustico(url):
       tempo_val *= 2
 
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
+    spec_rolloff = np.mean(
+        librosa.feature.spectral_rolloff(y=y, sr=sr, roll_percent=0.85)
+    )
     num_beats = len(beats)
 
-    # REGLA PURAMENTE ACÚSTICA: Sin mirar títulos, evaluamos si el sonido tiene ritmo o es voz/ruido plano
-    if spec_flatness > 0.08 or num_beats < 20:
+    # NUEVO FILTRO ACÚSTICO ESTRICTO:
+    # La voz humana hablada genera centros armónicos con un rolloff y flatness muy acotados,
+    # y carece de la continuidad rítmica real de una percusión bailable (aunque Librosa intente forzar beats).
+    # Si la energía armónica está muy concentrada en frecuencias de voz (rolloff bajo/medio) y hay baja densidad real:
+    if spec_flatness > 0.07 or num_beats < 22 or spec_rolloff < 2200:
       return {
           "cancion_formateada": nombre_visual,
           "tempo": round(tempo_val, 1),
@@ -176,7 +183,7 @@ def analizar_audio_100_acustico(url):
           "forzar_no_musical": True,
       }
 
-    # Descriptores musicales basados en el tempo detectado acústicamente
+    # Descriptores musicales reales si pasa la prueba acústica
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -368,7 +375,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-header">Análisis 100% Acústico y Puro</div>',
+    '<div class="sub-header">Análisis acústico con filtro anti-voz puro</div>',
     unsafe_allow_html=True,
 )
 
@@ -419,9 +426,9 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
     if es_url_valida(prompt):
       with st.chat_message("assistant"):
         with st.spinner(
-            "🎧 Analizando propiedades físicas y acústicas del audio..."
+            "🎧 Ejecutando análisis espectral y filtro anti-voz..."
         ):
-          analisis = analizar_audio_100_acustico(prompt)
+          analisis = analizar_audio_antivoz(prompt)
 
         if analisis.get("forzar_no_musical", False):
           prediccion_ml = "No Musical / Contenido Hablado"
@@ -432,8 +439,8 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
               f" *{analisis['cancion_formateada']}*\n\n*(El análisis"
-              " acústico determinó que carece de estructura rítmica bailable"
-              " estable).* "
+              " espectral detectó perfil de voz hablada pura sin soporte"
+              " rítmico bailable).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
@@ -451,7 +458,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
               obtener_detalles_coreograficos(prediccion_ml)
           )
 
-          reply = f"""🎵 **Pista Analizada (Acústica Pura):** **{analisis['cancion_formateada']}**
+          reply = f"""🎵 **Pista Analizada:** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
 📊 **Densidad Tatum:** {analisis['densidad_tatum']}
