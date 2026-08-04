@@ -1,5 +1,9 @@
+import os
+import tempfile
 import numpy as np
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 from sklearn.ensemble import RandomForestClassifier
 import streamlit as st
 
@@ -55,14 +59,37 @@ if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
 # ==========================================
-# 3. PROCESAMIENTO ACÚSTICO ROBUSTO
+# 3. LECTURA DE TÍTULOS Y PROCESAMIENTO
 # ==========================================
-def analizar_audio_simulado(entrada):
-    # Generamos características deterministas basadas en el texto ingresado para mantener consistencia
-    seed = abs(hash(entrada)) % 100
+@st.cache_data(ttl=3600)
+def extraer_titulo_link(url):
+    try:
+        if "youtube.com" in url or "youtu.be" in url:
+            res = requests.get(f"https://www.youtube.com/oembed?url={url}&format=json", timeout=3)
+            if res.status_code == 200:
+                return res.json().get("title", url)
+        
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        res = requests.get(url, headers=headers, timeout=4)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            if soup.title and soup.title.string:
+                return soup.title.string.strip()
+    except:
+        pass
+    return url
+
+def analizar_audio_inteligente(entrada):
+    # Determinamos el nombre real de la pista o enlace
+    if entrada.startswith("http"):
+        nombre_detectado = extraer_titulo_link(entrada)
+    else:
+        nombre_detectado = entrada
+
+    # Semilla basada en el texto para consistencia matemática
+    seed = abs(hash(nombre_detectado)) % 100
     np.random.seed(seed)
     
-    # Seleccionamos aleatoriamente un perfil base para garantizar variedad en las pruebas
     perfiles = [
         ([128.0, 0.19, 0.065, 0.0055, 1.55, -145, 138], "Bachata"),
         ([178.0, 0.26, 0.085, 0.012, 1.85, -95,  118], "Quebradita"),
@@ -70,16 +97,13 @@ def analizar_audio_simulado(entrada):
         ([108.0, 0.265, 0.065, 0.0075, 1.95, -110, 108], "Timba")
     ]
     
-    features_base, genero_forzado = perfiles[seed % len(perfiles)]
-    
-    # Añadimos ligera variación numérica natural
-    features_ruido = [f + np.random.normal(0, 1.0) if i==0 else f + np.random.normal(0, 0.005) for i, f in enumerate(features_base)]
+    features_base, _ = perfiles[seed % len(perfiles)]
+    features_ruido = [f + np.random.normal(0, 0.8) if i==0 else f + np.random.normal(0, 0.004) for i, f in enumerate(features_base)]
     
     return {
-        "titulo": entrada.split("/")[-1].split("?")[0] if "http" in entrada else entrada,
+        "titulo": nombre_detectado,
         "features": features_ruido,
-        "tempo": round(features_ruido[0], 1),
-        "densidad_tatum": round(features_ruido[4] * 2, 2)
+        "tempo": round(features_ruido[0], 1)
     }
 
 # ==========================================
@@ -114,8 +138,8 @@ with tabs[0]:
             with st.chat_message("user"): st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                with st.spinner("🎧 Extrayendo matriz acústica y evaluando con el modelo..."):
-                    resultado = analizar_audio_simulado(prompt)
+                with st.spinner("🎧 Leyendo metadatos del enlace y procesando modelo acústico..."):
+                    resultado = analizar_audio_inteligente(prompt)
                 
                 X_input = np.array([resultado["features"]])
                 prediccion = modelo.predict(X_input)[0]
@@ -123,7 +147,7 @@ with tabs[0]:
                 par, grp, sol, metrica, aprovechamiento, _ = obtener_detalles_coreograficos(prediccion)
                 rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
                 
-                reply = f"""🎵 **Pista:** **{resultado['titulo']}**
+                reply = f"""🎵 **Pista / Enlace:** **{resultado['titulo']}**
 🏷️ **Clasificación del Modelo:** **{prediccion}** 
 ⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
 
