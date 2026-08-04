@@ -10,14 +10,9 @@ import streamlit as st
 import yt_dlp
 
 # ==========================================
-# 1. CONFIGURACIÓN INICIAL DE LA APP
+# 1. CONFIGURACIÓN INICIAL
 # ==========================================
-st.set_page_config(
-    page_title="Síncopa - Asistente Coreográfico",
-    page_icon="💃",
-    layout="wide"
-)
-
+st.set_page_config(page_title="Síncopa - Asistente Coreográfico", page_icon="💃", layout="wide")
 st.markdown(
     """
     <style>
@@ -25,30 +20,22 @@ st.markdown(
     .sub-header { font-size: 1.1rem; color: #457B9D; text-align: center; margin-bottom: 1.5rem; }
     .stChatMessage { border-radius: 12px; }
     </style>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
 
 # ==========================================
-# 2. ENTRENAMIENTO DINÁMICO DEL MODELO
+# 2. ENTRENAMIENTO DINÁMICO (FEATURES REALES)
 # ==========================================
 @st.cache_resource
 def cargar_modelo_en_memoria():
-    # Variables acústicas (Features): [tempo, rmse, zcr, flatness, beat_strength, mfcc1, mfcc2]
     X_train = np.array([
-        # Quebradita (Rápido, alta energía, metales fuertes)
         [175.0, 0.25, 0.08, 0.010, 1.8, -100, 120],
         [180.0, 0.28, 0.09, 0.015, 1.9, -90,  115],
-        # Bachata (Velocidad media, percusión clara, guitarra brillante)
         [125.0, 0.18, 0.06, 0.005, 1.5, -150, 140],
         [130.0, 0.20, 0.07, 0.006, 1.6, -140, 135],
-        # Salsa (Rápido, brillante, polirritmia densa)
         [160.0, 0.22, 0.07, 0.008, 1.7, -120, 130],
         [165.0, 0.24, 0.08, 0.009, 1.8, -110, 125],
-        # Timba (Más lento o doble tiempo, bajo pesado, percusión cubana)
         [105.0, 0.26, 0.06, 0.007, 1.9, -115, 110],
         [110.0, 0.27, 0.07, 0.008, 2.0, -105, 105],
-        # Podcast / Voz Hablada (ZCR alto por consonantes, RMS bajo/variable, fuerza de beat nula)
         [110.0, 0.05, 0.15, 0.050, 0.5, -250, 80],
         [150.0, 0.08, 0.18, 0.060, 0.6, -230, 75],
         [90.0,  0.04, 0.12, 0.040, 0.4, -260, 85]
@@ -62,28 +49,19 @@ def cargar_modelo_en_memoria():
         "Podcast", "Podcast", "Podcast"
     ])
 
-    modelo_optimo = RandomForestClassifier(
-        n_estimators=300,
-        max_depth=12,
-        random_state=42,
-        class_weight="balanced"
-    )
+    modelo_optimo = RandomForestClassifier(n_estimators=300, max_depth=12, random_state=42, class_weight="balanced")
     modelo_optimo.fit(X_train, y_train)
     return modelo_optimo
 
 modelo = cargar_modelo_en_memoria()
 
-# Inicialización de estado de sesión
 if "messages" not in st.session_state:
-    st.session_state.messages = [{
-        "role": "assistant",
-        "content": "👋 **¡Hola! Síncopa - Clasificación Inteligente.**\nPega un enlace de audio (YouTube, Spotify, Apple Music o SoundCloud) para extraer features reales (MFCC, RMS, ZCR) y clasificar el género."
-    }]
+    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Clasificación Inteligente.**\nPega cualquier enlace (YouTube, Spotify, Apple Music) y el sistema lo procesará automáticamente."}]
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 
 # ==========================================
-# 3. SOPORTE DE PLATAFORMAS & METADATOS
+# 3. MANEJO DE URLs Y METADATOS
 # ==========================================
 def es_url_valida(texto):
     dominios = ["youtube.com", "youtu.be", "soundcloud.com", "spotify.com", "apple.com"]
@@ -94,70 +72,57 @@ def obtener_titulo_desde_link(url):
     try:
         if "youtube.com" in url or "youtu.be" in url:
             res = requests.get(f"https://www.youtube.com/oembed?url={url}&format=json", timeout=3)
-            if res.status_code == 200:
-                return res.json().get("title", "Audio")
+            if res.status_code == 200: return res.json().get("title", "Audio de YouTube")
         elif "spotify.com" in url:
             res = requests.get(f"https://open.spotify.com/oembed?url={url}", timeout=3)
-            if res.status_code == 200:
-                return res.json().get("title", "Audio de Spotify")
+            if res.status_code == 200: return res.json().get("title", "Audio de Spotify")
         
         headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get(url, headers=headers, timeout=3)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
             if soup.title and soup.title.string:
-                return (
-                    soup.title.string.strip()
-                    .replace(" | Spotify", "")
-                    .replace(" en Apple Music", "")
-                )
-    except Exception:
-        pass
-    return "Pista Analizada"
+                return soup.title.string.strip().replace(" | Spotify", "").replace(" en Apple Music", "")
+    except: pass
+    return url # Si no extrae título, usa la URL como referencia de búsqueda
 
 # ==========================================
-# 4. EXTRACCIÓN DE VARIABLES ACÚSTICAS REALES
+# 4. DESCARGA Y EXTRACCIÓN DE FEATURES (BUSCADOR UNIVERSAL)
 # ==========================================
 def analizar_audio_para_modelo(url):
     nombre_visual = obtener_titulo_desde_link(url)
     fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
     os.close(fd)
     
-    # Parámetros avanzados para evitar el error "HTTP Error 403: Forbidden"
     ydl_opts = {
         "format": "bestaudio/best",
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192"
-        }],
+        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
         "outtmpl": ruta_salida.replace(".mp3", ""),
         "quiet": True,
         "nocheckcertificate": True,
         "extractor_args": {
-            "youtube": {"player_client": ["android", "web"]}
+            "youtube": {"player_client": ["android", "web"]} 
         },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
     }
 
-    # Puente automático: Si la URL tiene DRM (Spotify/Apple), usamos el título para buscar y extraer el audio equivalente
-    target_url = url
-    if "spotify.com" in url or "apple.com" in url:
-        target_url = f"ytsearch1:{nombre_visual} audio"
+    # BÚSQUEDA UNIVERSAL: Blindamos el sistema buscando siempre el audio mediante su título o referencia
+    # Esto evita bloqueos de IDs específicos de YouTube o restricciones de plataforma
+    query_busqueda = nombre_visual if nombre_visual != url else url
+    target_url = f"ytsearch1:{query_busqueda} audio"
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([target_url])
         
         archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
-        # Cargamos 45 segundos para tener una muestra estadística robusta
         y, sr = librosa.load(archivo_final, duration=45.0, sr=22050)
-        if os.path.exists(archivo_final):
+        
+        if os.path.exists(archivo_final): 
             os.remove(archivo_final)
 
-        # Extracción matemática de features de audio
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
         tempo_val = float(tempo[0] if isinstance(tempo, np.ndarray) else tempo)
         
@@ -183,7 +148,7 @@ def analizar_audio_para_modelo(url):
         return {"error": str(e)}
 
 # ==========================================
-# 5. CATÁLOGOS COREOGRÁFICOS Y DE FITNESS
+# 5. LÓGICA DE UI Y RESPUESTAS
 # ==========================================
 def obtener_detalles_coreograficos(genero):
     datos = {
@@ -192,7 +157,7 @@ def obtener_detalles_coreograficos(genero):
         "Timba": (9, 9, 9, "Clave Cubana (2/3 o 3/2). Polirritmia compleja.", "Nudos Casino y despelote.", "Ropa urbana deportiva."),
         "Salsa": (9, 8, 9, "Fraseo 8 tiempos. Acentos en campana.", "Shines rápidos y giros en eje.", "Ropa semi-formal.")
     }
-    return datos.get(genero, (0, 0, 0, "", "", ""))
+    return datos.get(genero, (0,0,0,"","",""))
 
 CATALOGO_ENTRENAMIENTO = {
     "Quebradita": "🔥 **Bloque HIIT:** Tabata (20s/10s) Jump Squats y Burpees. Fortalecimiento de gemelos.",
@@ -201,39 +166,28 @@ CATALOGO_ENTRENAMIENTO = {
     "Timba": "🔥 **Bloque Polirritmia:** Sentadillas sumo con toque. Planchas tocando hombros."
 }
 
-# ==========================================
-# 6. LÓGICA DE INTERFAZ Y CHAT
-# ==========================================
 st.markdown('<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>', unsafe_allow_html=True)
 tabs = st.tabs(["💬 Chat Asistente", "📊 Historial", "⚙️ Modelo"])
 
 with tabs[0]:
     for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
 with tabs[1]:
     if st.session_state.historial_evaluaciones:
         st.dataframe(pd.DataFrame(st.session_state.historial_evaluaciones), use_container_width=True)
-    else:
-        st.info("Aún no has evaluado ninguna pista.")
 
 with tabs[2]:
-    st.json({
-        "Algoritmo": "RandomForestClassifier",
-        "Features": ["tempo", "rmse", "zcr", "flatness", "beat_strength", "mfcc1", "mfcc2"],
-        "Clases": list(modelo.classes_)
-    })
+    st.json({"Algoritmo": "RandomForestClassifier", "Features": ["tempo", "rmse", "zcr", "flatness", "beat_strength", "mfcc1", "mfcc2"], "Clases": list(modelo.classes_)})
 
-if prompt := st.chat_input("Pega un enlace de YouTube, Spotify o Apple Music..."):
+if prompt := st.chat_input("Pega cualquier enlace de música o podcast..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with tabs[0]:
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
 
         if es_url_valida(prompt):
             with st.chat_message("assistant"):
-                with st.spinner("🎧 Extrayendo metadatos y procesando matriz acústica..."):
+                with st.spinner("🎧 Procesando audio y extrayendo matriz de características..."):
                     resultado = analizar_audio_para_modelo(prompt)
                 
                 if "error" in resultado:
@@ -242,13 +196,8 @@ if prompt := st.chat_input("Pega un enlace de YouTube, Spotify o Apple Music..."
                     X_input = np.array([resultado["features"]])
                     prediccion = modelo.predict(X_input)[0]
 
-                    # Si el modelo detecta ZCR alto + baja fuerza de beat => Podcast/Voz
                     if prediccion == "Podcast":
-                        reply = (
-                            f"⚠️ **Contenido No Musical Detectado**\n\n"
-                            f"🎵 **Pista:** *{resultado['cancion_formateada']}*\n\n"
-                            f"*(El clasificador identificó firmas acústicas de voz hablada/podcast: alta tasa de cruce por cero y baja fuerza de pulso rítmico).*"
-                        )
+                        reply = f"⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:** *{resultado['cancion_formateada']}*\n\n*(El clasificador identificó firmas acústicas de voz hablada/podcast).* "
                         st.markdown(reply)
                         st.session_state.messages.append({"role": "assistant", "content": reply})
                     else:
@@ -258,16 +207,14 @@ if prompt := st.chat_input("Pega un enlace de YouTube, Spotify o Apple Music..."
                         reply = f"""🎵 **Pista:** **{resultado['cancion_formateada']}**
 🏷️ **Clasificación del Modelo:** **{prediccion}** 
 ⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
-📊 **Fuerza de Pulso (Proxy Densidad):** {resultado['densidad_tatum']}
+📊 **Fuerza de Pulso:** {resultado['densidad_tatum']}
 
 ---
 ### 🎼 Marcación Coreográfica:
 {metrica}
 
-### 📊 Calificación por Modalidad de Baile:
-* 👫 **Pareja:** {par} / 10
-* 👯‍♀️ **Grupo:** {grp} / 10
-* 🕺 **Solista:** {sol} / 10
+### 📊 Calificación:
+* 👫 Pareja: {par}/10 | 👯‍♀️ Grupo: {grp}/10 | 🕺 Solista: {sol}/10
 
 ### 💡 Aprovechamiento:
 {aprovechamiento}
@@ -277,11 +224,7 @@ if prompt := st.chat_input("Pega un enlace de YouTube, Spotify o Apple Music..."
 """
                         st.markdown(reply)
                         st.session_state.messages.append({"role": "assistant", "content": reply})
-                        st.session_state.historial_evaluaciones.append({
-                            "Canción": resultado['cancion_formateada'],
-                            "Género": prediccion,
-                            "Tempo": resultado['tempo']
-                        })
+                        st.session_state.historial_evaluaciones.append({"Canción": resultado['cancion_formateada'], "Género": prediccion, "Tempo": resultado['tempo']})
         else:
             with st.chat_message("assistant"):
                 reply = "💡 Por favor, pega un enlace válido de YouTube, Spotify, Apple Music o SoundCloud."
