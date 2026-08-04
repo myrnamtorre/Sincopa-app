@@ -66,12 +66,12 @@ def cargar_modelo_en_memoria():
 
 modelo = cargar_modelo_en_memoria()
 
-MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Calibración Definitiva.**
+MENSAJE_BIENVENIDA = """👋 **¡Hola! Síncopa - Acústica 100% Pura.**
 
 ### 📚 Guía Rápida de Uso:
-1. 🎧 **Analiza una canción:** El sistema evalúa la pista aplicando filtros estrictos contra contenido hablado.
-2. 🏷️ **Metadatos Limpios:** Captura del título solo para visualización.
-3. 🤖 **Inferencia por Machine Learning:** Clasificación robusta de géneros y contenidos.
+1. 🎧 **Analiza una canción:** El sistema evalúa exclusivamente las propiedades del sonido descargado mediante Librosa.
+2. 🏷️ **Metadatos Limpios:** Captura del título solo para mostrarlo en pantalla.
+3. 🤖 **Inferencia por Machine Learning:** Clasificación basada en ritmo y energía real.
 
 ---
 💡 *Pega un enlace de audio o escribe tu consulta abajo para comenzar.*"""
@@ -121,42 +121,8 @@ def obtener_titulo_desde_link(url):
   return "Pista de Audio Externa"
 
 
-def analizar_audio_definitivo(url):
+def analizar_audio_100_acustico(url):
   nombre_visual = obtener_titulo_desde_link(url)
-
-  # FILTRO MAESTRO DE SEGURIDAD: Bloqueo inmediato por metadatos conocidos de charla/podcast
-  url_lower = url.lower()
-  titulo_lower = nombre_visual.lower()
-  palabras_prohibidas = [
-      "pepe & teo",
-      "lola cortes",
-      "podcast",
-      "entrevista",
-      "charla",
-      "conversación",
-      "vol 2",
-      "vol.",
-  ]
-
-  es_hablado_forzado = any(
-      p in url_lower or p in titulo_lower for p in palabras_prohibidas
-  )
-
-  if es_hablado_forzado:
-    return {
-        "cancion_formateada": nombre_visual,
-        "tempo": 0.0,
-        "danceability": 0.0,
-        "energy": 0.0,
-        "valence": 0.0,
-        "speechiness": 1.0,
-        "acousticness": 1.0,
-        "densidad_tatum": 0.0,
-        "num_secciones": 0,
-        "num_compases": 0,
-        "num_tiempos_beats": 0,
-        "forzar_no_musical": True,
-    }
 
   fd, ruta_salida = tempfile.mkstemp(suffix=".mp3")
   os.close(fd)
@@ -178,6 +144,7 @@ def analizar_audio_definitivo(url):
 
     archivo_final = ruta_salida.replace(".mp3", "") + ".mp3"
 
+    # Carga de la ventana de audio para análisis puramente físico
     y, sr = librosa.load(archivo_final, duration=45.0, sr=22050)
 
     if os.path.exists(archivo_final):
@@ -192,6 +159,7 @@ def analizar_audio_definitivo(url):
     spec_flatness = np.mean(librosa.feature.spectral_flatness(y=y))
     num_beats = len(beats)
 
+    # REGLA PURAMENTE ACÚSTICA: Sin mirar títulos, evaluamos si el sonido tiene ritmo o es voz/ruido plano
     if spec_flatness > 0.08 or num_beats < 20:
       return {
           "cancion_formateada": nombre_visual,
@@ -208,7 +176,7 @@ def analizar_audio_definitivo(url):
           "forzar_no_musical": True,
       }
 
-    # Descriptores musicales reales
+    # Descriptores musicales basados en el tempo detectado acústicamente
     if tempo_val >= 165.0:
       danceability, energy, valence, acousticness, densidad = (
           0.89,
@@ -400,7 +368,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="sub-header">Análisis acústico con filtro estricto</div>',
+    '<div class="sub-header">Análisis 100% Acústico y Puro</div>',
     unsafe_allow_html=True,
 )
 
@@ -450,8 +418,10 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
 
     if es_url_valida(prompt):
       with st.chat_message("assistant"):
-        with st.spinner("🎧 Procesando audio con filtros de seguridad..."):
-          analisis = analizar_audio_definitivo(prompt)
+        with st.spinner(
+            "🎧 Analizando propiedades físicas y acústicas del audio..."
+        ):
+          analisis = analizar_audio_100_acustico(prompt)
 
         if analisis.get("forzar_no_musical", False):
           prediccion_ml = "No Musical / Contenido Hablado"
@@ -461,9 +431,9 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
         if "No Musical" in prediccion_ml:
           reply = (
               "⚠️ **Contenido No Musical Detectado**\n\n🎵 **Pista:**"
-              f" *{analisis['cancion_formateada']}*\n\n*(El filtro identificó"
-              " que corresponde a una entrevista, programa hablado o contenido"
-              " sin ritmo bailable).* "
+              f" *{analisis['cancion_formateada']}*\n\n*(El análisis"
+              " acústico determinó que carece de estructura rítmica bailable"
+              " estable).* "
           )
           st.markdown(reply)
           st.session_state.messages.append(
@@ -481,7 +451,7 @@ if prompt := st.chat_input("Pega un enlace de audio o escribe tu consulta..."):
               obtener_detalles_coreograficos(prediccion_ml)
           )
 
-          reply = f"""🎵 **Pista Analizada:** **{analisis['cancion_formateada']}**
+          reply = f"""🎵 **Pista Analizada (Acústica Pura):** **{analisis['cancion_formateada']}**
 🏷️ **Género Clasificado:** **{prediccion_ml}** 
 ⏱️ **Tempo Estimado:** ~{tempo_val} BPM
 📊 **Densidad Tatum:** {analisis['densidad_tatum']}
