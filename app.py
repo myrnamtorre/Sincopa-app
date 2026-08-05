@@ -88,7 +88,10 @@ def extraer_titulo_link(url):
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
             if soup.title and soup.title.string:
-                return soup.title.string.strip()
+                titulo = soup.title.string.strip()
+                # Limpiamos sufijos comunes de plataformas para que no afecten el análisis
+                titulo = titulo.replace(" - song and lyrics by", "").replace(" | Spotify", "").strip()
+                return titulo
     except:
         pass
     return url
@@ -126,14 +129,17 @@ def analizar_entrada(entrada):
 
     texto_lower = nombre_detectado.lower()
     
-    palabras_rechazo = ["podcast", "episodio", "relato", "relatos", "criminal", "crimen", "terror", "miedo", "historias", "entrevista", "conversación", "noticias", "spotify", "ivoox"]
-    if any(p in texto_lower for p in palabras_rechazo):
+    # Filtro exclusivo para podcasts o programas hablados reales (evitando bloquear música)
+    palabras_rechazo = ["podcast", "episodio de podcast", "true crime podcast", "entrevista exclusiva - programa"]
+    es_no_musical = any(p in texto_lower for p in palabras_rechazo) and "song" not in texto_lower
+
+    if es_no_musical:
         return {"es_valido": False, "titulo": nombre_detectado}
 
     if "quebradora" in texto_lower or "quebradita" in texto_lower or "banda" in texto_lower:
         features = [178.0, 0.26, 0.085, 0.012, 1.85, -95, 118]
         prediccion = "Quebradita"
-    elif "bachata" in texto_lower:
+    elif "bachata" in texto_lower or "prince royce" in texto_lower or "aventura" in texto_lower:
         features = [128.0, 0.19, 0.065, 0.0055, 1.55, -145, 138]
         prediccion = "Bachata"
     elif "salsa" in texto_lower:
@@ -188,7 +194,6 @@ with tabs[0]:
             with st.chat_message("assistant"):
                 prompt_lower = prompt.lower()
                 
-                # 1. Sugerencias dinámicas
                 if any(g in prompt_lower for g in ["salsa", "bachata", "quebradita", "timba"]) and any(k in prompt_lower for k in ["sugerencia", "dame", "recomienda", "canción", "canciones", "lista"]):
                     if "salsa" in prompt_lower: gen_sug = "Salsa"
                     elif "bachata" in prompt_lower: gen_sug = "Bachata"
@@ -198,7 +203,6 @@ with tabs[0]:
                     sugerencia_item = obtener_sugerencia_dinamica(gen_sug)
                     reply = f"🎶 **Sugerencia dinámica para {gen_sug}:**\nTe recomiendo probar con: **{sugerencia_item}**."
                 
-                # 2. Vestuario basado en la última canción evaluada
                 elif "vestuario" in prompt_lower:
                     if st.session_state.ultimo_genero_evaluado:
                         gen_vest = st.session_state.ultimo_genero_evaluado
@@ -206,14 +210,13 @@ with tabs[0]:
                     else:
                         reply = "⚠️ Aún no has evaluado ninguna canción en esta sesión. Por favor evalúa una pista primero o especifica el género para darte opciones de vestuario de competencia."
                 
-                # 3. Evaluación de pistas
                 else:
                     resultado = analizar_entrada(prompt)
                     if not resultado["es_valido"]:
                         reply = f"""⚠️ **Audio Rechazado (Contenido No Musical)**\n🎵 *{resultado['titulo']}*\n\nEl sistema detectó que corresponde a contenido hablado o no musical."""
                     else:
                         prediccion = resultado["genero"]
-                        st.session_state.ultimo_genero_evaluado = prediccion  # Guardamos el género evaluado
+                        st.session_state.ultimo_genero_evaluado = prediccion
                         par, grp, sol, metrica, aprovechamiento = obtener_detalles_coreograficos(prediccion)
                         entrenamiento_agilidad = CATALOGO_AGILIDAD.get(prediccion, "")
                         
@@ -243,7 +246,6 @@ with tabs[0]:
                 st.markdown(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
 
-    # Script dinámico para mantener la página desplazada siempre al final del contenido
     components.html(
         """
         <script>
