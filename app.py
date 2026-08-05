@@ -1,4 +1,5 @@
 import os
+import random
 import numpy as np
 import pandas as pd
 import requests
@@ -7,7 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 import streamlit as st
 
 # ==========================================
-# 1. CONFIGURACIÓN INICIAL
+# 1. CONFIGURACIÓN Y ESTILOS (BARRA AL FINAL)
 # ==========================================
 st.set_page_config(page_title="Síncopa - Asistente Coreográfico", page_icon="💃", layout="wide")
 st.markdown(
@@ -16,6 +17,8 @@ st.markdown(
     .main-header { font-size: 2.2rem; font-weight: 700; color: #E63946; text-align: center; margin-bottom: 0.5rem; }
     .sub-header { font-size: 1.1rem; color: #457B9D; text-align: center; margin-bottom: 1.5rem; }
     .stChatMessage { border-radius: 12px; }
+    /* Fija la barra de texto al final */
+    .stChatInput { position: fixed; bottom: 0; background: white; z-index: 100; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -34,14 +37,7 @@ def cargar_modelo_en_memoria():
         [108.0, 0.265, 0.065, 0.0075, 1.95, -110, 108],
         [105.0, 0.26, 0.06,  0.007,  1.90, -115, 110]
     ])
-    
-    y_train = np.array([
-        "Bachata", "Bachata",
-        "Salsa", "Salsa",
-        "Quebradita", "Quebradita",
-        "Timba", "Timba"
-    ])
-
+    y_train = np.array(["Bachata", "Bachata", "Salsa", "Salsa", "Quebradita", "Quebradita", "Timba", "Timba"])
     modelo_optimo = RandomForestClassifier(n_estimators=300, max_depth=10, random_state=42, class_weight="balanced")
     modelo_optimo.fit(X_train, y_train)
     return modelo_optimo
@@ -49,12 +45,21 @@ def cargar_modelo_en_memoria():
 modelo = cargar_modelo_en_memoria()
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "👋 **¡Hola! Síncopa - Asistente Coreográfico.**\nPega cualquier enlace o título para evaluar la matriz del modelo."}]
+    st.session_state.messages = [{
+        "role": "assistant", 
+        "content": "👋 **¡Hola! Soy Síncopa**, tu asistente coreográfico.\n\n"
+                   "🎯 **Puedo ayudarte a evaluar pistas de:** Bachata, Salsa, Quebradita y Timba.\n\n"
+                   "⚠️ **Mis limitaciones actuales son:**\n"
+                   "1. No realizo descargas de audio locales pesadas en servidores externos protegidos por DRM.\n"
+                   "2. Mi análisis se centra exclusivamente en la evaluación rítmica, métrica y coreográfica de los géneros soportados."
+    }]
 if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
+if "sugerencias_usadas" not in st.session_state:
+    st.session_state.sugerencias_usadas = {"Salsa": [], "Bachata": [], "Quebradita": [], "Timba": []}
 
 # ==========================================
-# 3. EXTRACCIÓN Y FILTRADO INTELIGENTE
+# 3. EXTRACCIÓN Y LÓGICA DE RESPUESTAS
 # ==========================================
 @st.cache_data(ttl=3600)
 def extraer_titulo_link(url):
@@ -63,8 +68,7 @@ def extraer_titulo_link(url):
             res = requests.get(f"https://www.youtube.com/oembed?url={url}&format=json", timeout=3)
             if res.status_code == 200:
                 return res.json().get("title", url)
-        
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get(url, headers=headers, timeout=4)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
@@ -74,6 +78,31 @@ def extraer_titulo_link(url):
         pass
     return url
 
+def obtener_sugerencia_dinamica(genero):
+    catalogo = {
+        "Salsa": ["Vivir Mi Vida - Marc Anthony", "Llorarás - Oscar D'León", "La Rebelión - Joe Arroyo", "Aguaje Borondongo - Sonora Matancera", "Hacha y Machete - Héctor Lavoe"],
+        "Bachata": ["Propuesta Indecente - Romeo Santos", "Darte un Beso - Prince Royce", "Obsesión - Aventura", "Eres Mía - Romeo Santos", "Inmortal - Aventura"],
+        "Quebradita": ["La Culebra - Banda Machos", "El Pecador - Mi Banda El Mexicano", "No Bailes de Caballito - Mi Banda El Mexicano", "La Quebradora - Banda El Recodo"],
+        "Timba": ["Te Pone la Cabeza Mala - Los Van Van", "La Sandunguita - Issac Delgado", "Esto te Pone Cabeza - Manolito Simonet"]
+    }
+    opciones = catalogo.get(genero, [])
+    disponibles = [c for c in opciones if c not in st.session_state.sugerencias_usadas[genero]]
+    if not disponibles:
+        st.session_state.sugerencias_usadas[genero] = []
+        disponibles = opciones
+    elegida = random.choice(disponibles)
+    st.session_state.sugerencias_usadas[genero].append(elegida)
+    return elegida
+
+def obtener_vestuario(genero):
+    vestuarios = {
+        "Bachata": "👗 **Vestuario recomendado:** Ropa estilizada y ajustada que permita fluidez de cadera. Calzado con tacón delgado o botines flexibles para mayor contacto con el suelo.",
+        "Salsa": "💃 **Vestuario recomendado:** Ropa semi-formal o vestidos con vuelo corto para lucir los giros. Zapatos de baile profesionales con suela de cuero.",
+        "Quebradita": "🤠 **Vestuario recomendado:** Estilo vaquero tradicional, camisas vaqueras, pantalones resistentes y botas de suela corrida aptas para el impacto y el braceo.",
+        "Timba": "👟 **Vestuario recomendado:** Ropa urbana y deportiva de alta comodidad, ideal para permitir flexibilidad total en piernas y quiebres rápidos."
+    }
+    return vestuarios.get(genero, "Vestuario versátil de baile.")
+
 def analizar_entrada(entrada):
     if entrada.startswith("http"):
         nombre_detectado = extraer_titulo_link(entrada)
@@ -82,23 +111,10 @@ def analizar_entrada(entrada):
 
     texto_lower = nombre_detectado.lower()
     
-    # Filtro ampliado para detectar charlas, programas, entrevistas, podcasts y contenido no musical
-    palabras_rechazo = [
-        "podcast", "episodio", "relato", "relatos", "criminal", "crimen", 
-        "terror", "miedo", "historias", "entrevista", "conversación", "noticias", 
-        "spotify", "apple podcasts", "ivoox", "contra?", "pepe & teo", "charlas", 
-        "programa", "opinión", "debate", "vlog", "live"
-    ]
-    
-    es_no_musical = any(p in texto_lower for p in palabras_rechazo)
+    palabras_rechazo = ["podcast", "episodio", "relato", "relatos", "criminal", "crimen", "terror", "miedo", "historias", "entrevista", "conversación", "noticias", "spotify", "ivoox"]
+    if any(p in texto_lower for p in palabras_rechazo):
+        return {"es_valido": False, "titulo": nombre_detectado}
 
-    if es_no_musical:
-        return {
-            "es_valido": False,
-            "titulo": nombre_detectado
-        }
-
-    # Mapeo directo y preciso para géneros de baile según palabras clave del contenido
     if "quebradora" in texto_lower or "quebradita" in texto_lower or "banda" in texto_lower:
         features = [178.0, 0.26, 0.085, 0.012, 1.85, -95, 118]
         prediccion = "Quebradita"
@@ -112,7 +128,6 @@ def analizar_entrada(entrada):
         features = [108.0, 0.265, 0.065, 0.0075, 1.95, -110, 108]
         prediccion = "Timba"
     else:
-        # Si es una pista sin nombre de género explícito, el modelo predice usando un perfil neutro de baile
         features = [155.0, 0.21, 0.07, 0.008, 1.7, -120, 130]
         prediccion = modelo.predict(np.array([features]))[0]
 
@@ -129,49 +144,64 @@ def analizar_entrada(entrada):
 # ==========================================
 def obtener_detalles_coreograficos(genero):
     datos = {
-        "Bachata": (8, 6, 7, "Compás 4/4. Acento en pulso 4 y 8 con tap/cadera.", "Conexión corporal y marco fluido.", "Ropa estilizada."),
-        "Quebradita": (10, 9, 8, "Compás 2/4. Acento constante en el bote.", "Acrobacias y giros veloces.", "Ropa vaquera y botas."),
-        "Timba": (9, 9, 9, "Clave Cubana (2/3 o 3/2). Polirritmia compleja.", "Nudos Casino y despelote.", "Ropa urbana deportiva."),
-        "Salsa": (9, 8, 9, "Fraseo 8 tiempos. Acentos en campana.", "Shines rápidos y giros en eje.", "Ropa semi-formal.")
+        "Bachata": (8, 6, 7, "Compás 4/4. Acento en pulso 4 y 8 con tap/cadera.", "Conexión corporal y marco fluido."),
+        "Quebradita": (10, 9, 8, "Compás 2/4. Acento constante en el bote.", "Acrobacias y giros veloces."),
+        "Timba": (9, 9, 9, "Clave Cubana (2/3 o 3/2). Polirritmia compleja.", "Nudos Casino y despelote."),
+        "Salsa": (9, 8, 9, "Fraseo 8 tiempos. Acentos en campana.", "Shines rápidos y giros en eje.")
     }
-    return datos.get(genero, (0,0,0,"","",""))
+    return datos.get(genero, (0,0,0,"",""))
 
-CATALOGO_ENTRENAMIENTO = {
-    "Quebradita": "🔥 **Bloque HIIT:** Tabata (20s/10s) Jump Squats y Burpees.",
-    "Bachata": "🔥 **Bloque Core:** Tabata Planchas con rotación. Puente de glúteos unilateral.",
-    "Salsa": "🔥 **Bloque Agilidad:** 5x45s skipping alto. Desplantes dinámicos alternados.",
-    "Timba": "🔥 **Bloque Polirritmia:** Sentadillas sumo con toque. Planchas tocando hombros."
+# Entrenamiento enfocado estrictamente en agilidad con justificación técnica
+CATALOGO_AGILIDAD = {
+    "Quebradita": "⚡ **Entrenamiento de Agilidad:** Saltos pliométricos cortos (2x30s) y sentadillas explosivas.\n> *¿Por qué?* Desarrolla la potencia en el tren inferior requerida para el rebote constante y la estabilidad en acrobacias.",
+    "Bachata": "⚡ **Entrenamiento de Agilidad:** Giros en eje sobre una sola pierna y movilidad pélvica aislada (3 series de 10 reps).\n> *¿Por qué?* Mejora el control del centro de gravedad y la transición fluida de caderas sin perder el tiempo fuerte.",
+    "Salsa": "⚡ **Entrenamiento de Agilidad:** Coordinación de pies tipo *shines* a alta velocidad sobre metatarsos (4 bloques de 45s).\n> *¿Por qué?* Incrementa la velocidad de reacción en los tobillos y la agilidad de los pasos libres.",
+    "Timba": "⚡ **Entrenamiento de Agilidad:** Desplazamientos laterales rápidos y quiebres de cintura con cambio de peso (3x1 min).\n> *¿Por qué?* Facilita la adaptación a la polirritmia compleja y los cambios abruptos de ritmo característicos del género."
 }
 
 st.markdown('<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>', unsafe_allow_html=True)
-tabs = st.tabs(["💬 Chat Asistente", "📊 Historial", "⚙️ Modelo"])
+tabs = st.tabs(["💬 Chat Asistente", "📊 Historial y Descarga", "⚙️ Modelo"])
 
 with tabs[0]:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Pega el enlace o nombre de la pista a evaluar..."):
+    if prompt := st.chat_input("Pega el enlace, pide sugerencias, vestuario o entrenamiento..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with tabs[0]:
             with st.chat_message("user"): st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                with st.spinner("🎧 Validando contenido y evaluando matriz..."):
-                    resultado = analizar_entrada(prompt)
+                prompt_lower = prompt.lower()
                 
-                if not resultado["es_valido"]:
-                    reply = f"""⚠️ **Audio Rechazado (Contenido No Musical)**
-🎵 *{resultado['titulo']}*
-
-El sistema detectó que corresponde a un programa de conversación o contenido hablado. No se realizará la evaluación coreográfica."""
-                    st.markdown(reply)
-                    st.session_state.messages.append({"role": "assistant", "content": reply})
-                else:
-                    prediccion = resultado["genero"]
-                    par, grp, sol, metrica, aprovechamiento, _ = obtener_detalles_coreograficos(prediccion)
-                    rutina = CATALOGO_ENTRENAMIENTO.get(prediccion, "")
+                # Identificador de solicitudes de sugerencias de manera dinámica
+                if any(g in prompt_lower for g in ["salsa", "bachata", "quebradita", "timba"]) and ("sugerencia" in prompt_lower or "dame" in prompt_lower or "recomienda" in prompt_lower or "canción" in prompt_lower or "canciones" in prompt_lower):
+                    if "salsa" in prompt_lower: gen_sug = "Salsa"
+                    elif "bachata" in prompt_lower: gen_sug = "Bachata"
+                    elif "quebradita" in prompt_lower: gen_sug = "Quebradita"
+                    else: gen_sug = "Timba"
                     
-                    reply = f"""🎵 **Pista / Enlace:** **{resultado['titulo']}**
+                    sugerencia_item = obtener_sugerencia_dinamica(gen_sug)
+                    reply = f"🎶 **Sugerencia dinámica para {gen_sug}:**\nTe recomiendo probar con: **{sugerencia_item}**."
+                
+                # Identificador de solicitudes de vestuario
+                elif "vestuario" in prompt_lower:
+                    if "salsa" in prompt_lower: gen_vest = "Salsa"
+                    elif "bachata" in prompt_lower: gen_vest = "Bachata"
+                    elif "quebradita" in prompt_lower: gen_vest = "Quebradita"
+                    else: gen_vest = "Timba"
+                    reply = obtener_vestuario(gen_vest)
+                
+                else:
+                    resultado = analizar_entrada(prompt)
+                    if not resultado["es_valido"]:
+                        reply = f"""⚠️ **Audio Rechazado (Contenido No Musical)**\n🎵 *{resultado['titulo']}*\n\nEl sistema detectó que corresponde a contenido hablado o no musical."""
+                    else:
+                        prediccion = resultado["genero"]
+                        par, grp, sol, metrica, aprovechamiento = obtener_detalles_coreograficos(prediccion)
+                        entrenamiento_agilidad = CATALOGO_AGILIDAD.get(prediccion, "")
+                        
+                        reply = f"""🎵 **Pista / Enlace:** **{resultado['titulo']}**
 🏷️ **Clasificación del Modelo:** **{prediccion}** 
 ⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
 
@@ -186,15 +216,33 @@ El sistema detectó que corresponde a un programa de conversación o contenido h
 {aprovechamiento}
 
 ---
-{rutina}
+{entrenamiento_agilidad}
 """
-                    st.markdown(reply)
-                    st.session_state.messages.append({"role": "assistant", "content": reply})
-                    st.session_state.historial_evaluaciones.append({"Canción": resultado['titulo'], "Género": prediccion, "Tempo": resultado['tempo']})
+                        st.session_state.historial_evaluaciones.append({
+                            "Canción": resultado['titulo'], 
+                            "Género": prediccion, 
+                            "Tempo": resultado['tempo']
+                        })
+
+                st.markdown(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
 
 with tabs[1]:
+    st.subheader("📊 Historial de Evaluaciones y Exportación")
     if st.session_state.historial_evaluaciones:
-        st.dataframe(pd.DataFrame(st.session_state.historial_evaluaciones), use_container_width=True)
+        df_historial = pd.DataFrame(st.session_state.historial_evaluaciones)
+        st.dataframe(df_historial, use_container_width=True)
+        
+        # Opción para descargar las evaluaciones consultadas
+        csv_data = df_historial.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Descargar Evaluaciones en CSV",
+            data=csv_data,
+            file_name="historial_evaluaciones_sincopa.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("Aún no hay canciones evaluadas en el historial.")
 
 with tabs[2]:
     st.json({"Algoritmo": "RandomForestClassifier", "Features": ["tempo", "rmse", "zcr", "flatness", "beat_strength", "mfcc1", "mfcc2"], "Clases": list(modelo.classes_)})
