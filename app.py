@@ -6,9 +6,10 @@ import requests
 from bs4 import BeautifulSoup
 from sklearn.ensemble import RandomForestClassifier
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ==========================================
-# 1. CONFIGURACIÓN Y ESTILOS (CAJA AMPLIADA AL FINAL)
+# 1. CONFIGURACIÓN Y ESTILOS
 # ==========================================
 st.set_page_config(page_title="Síncopa - Asistente Coreográfico", page_icon="💃", layout="wide")
 st.markdown(
@@ -18,7 +19,6 @@ st.markdown(
     .sub-header { font-size: 1.1rem; color: #457B9D; text-align: center; margin-bottom: 1.5rem; }
     .stChatMessage { border-radius: 12px; }
     
-    /* Amplía el cuadro de texto y lo fija al fondo de la pantalla */
     .stChatInput { 
         position: fixed; 
         bottom: 0; 
@@ -28,8 +28,6 @@ st.markdown(
         background: rgba(255, 255, 255, 0.95); 
         z-index: 100; 
     }
-    
-    /* Aumenta la altura y tamaño interno del textarea */
     .stChatInput textarea {
         height: 90px !important;
         font-size: 1rem !important;
@@ -72,6 +70,8 @@ if "historial_evaluaciones" not in st.session_state:
     st.session_state.historial_evaluaciones = []
 if "sugerencias_usadas" not in st.session_state:
     st.session_state.sugerencias_usadas = {"Salsa": [], "Bachata": [], "Quebradita": [], "Timba": []}
+if "ultimo_genero_evaluado" not in st.session_state:
+    st.session_state.ultimo_genero_evaluado = None
 
 # ==========================================
 # 3. EXTRACCIÓN Y LÓGICA DE RESPUESTAS
@@ -109,14 +109,14 @@ def obtener_sugerencia_dinamica(genero):
     st.session_state.sugerencias_usadas[genero].append(elegida)
     return elegida
 
-def obtener_vestuario(genero):
+def obtener_vestuario_competencia(genero):
     vestuarios = {
-        "Bachata": "👗 **Vestuario recomendado:** Ropa estilizada y ajustada que permita fluidez de cadera. Calzado con tacón delgado o botines flexibles para mayor contacto con el suelo.",
-        "Salsa": "💃 **Vestuario recomendado:** Ropa semi-formal o vestidos con vuelo corto para lucir los giros. Zapatos de baile profesionales con suela de cuero.",
-        "Quebradita": "🤠 **Vestuario recomendado:** Estilo vaquero tradicional, camisas vaqueras, pantalones resistentes y botas de suela corrida aptas para el impacto y el braceo.",
-        "Timba": "👟 **Vestuario recomendado:** Ropa urbana y deportiva de alta comodidad, ideal para permitir flexibilidad total en piernas y quiebres rápidos."
+        "Bachata": "👗 **Vestuario para Competencia de Bachata:**\n* **Mujeres:** Vestidos ajustados con flecos o aberturas que acentúen la cadera, pedrería brillante y zapatos con tacón delgado o botines flexibles.\n* **Hombres:** Pantalón entallado de vestir, camisas estilizadas (a veces abiertas o translúcidas) y zapatos de baile con suela flexible.",
+        "Salsa": "💃 **Vestuario para Competencia de Salsa:**\n* **Mujeres:** Vestidos cortos con vuelo y capas para lucir los giros en competencia, flecos dinámicos y zapatos profesionales de suela de cuero con tacón cubano o aguja.\n* **Hombres:** Pantalón de corte latino, camisas camiseras o body de competencia, fajín opcional y zapatos de baile profesionales.",
+        "Quebradita": "🤠 **Vestuario para Competencia de Quebradita:**\n* **Mujeres:** Vestidos vaqueros estilizados con falda amplia para los giros de rodeo, chalecos con flecos y botas vaqueras de suela corrida.\n* **Hombres:** Camisa vaquera de competencia con bordados, chaleco, pantalón vaqueras resistentes y botas de rodeo aptas para el impacto y soporte.",
+        "Timba": "👟 **Vestuario para Competencia de Timba:**\n* **Mujeres:** Ropa urbana deportiva de alta costura, conjuntos de dos piezas con mallas y tenis flexibles o zapatillas de jazz para quiebres rápidos.\n* **Hombres:** Pantalón jogger de competencia estilizado, camisetas sin mangas o chaquetas deportivas abiertas y tenis de suela lisa."
     }
-    return vestuarios.get(genero, "Vestuario versátil de baile.")
+    return vestuarios.get(genero, "Vestuario general de competencia.")
 
 def analizar_entrada(entrada):
     if entrada.startswith("http"):
@@ -188,7 +188,8 @@ with tabs[0]:
             with st.chat_message("assistant"):
                 prompt_lower = prompt.lower()
                 
-                if any(g in prompt_lower for g in ["salsa", "bachata", "quebradita", "timba"]) and ("sugerencia" in prompt_lower or "dame" in prompt_lower or "recomienda" in prompt_lower or "canción" in prompt_lower or "canciones" in prompt_lower):
+                # 1. Sugerencias dinámicas
+                if any(g in prompt_lower for g in ["salsa", "bachata", "quebradita", "timba"]) and any(k in prompt_lower for k in ["sugerencia", "dame", "recomienda", "canción", "canciones", "lista"]):
                     if "salsa" in prompt_lower: gen_sug = "Salsa"
                     elif "bachata" in prompt_lower: gen_sug = "Bachata"
                     elif "quebradita" in prompt_lower: gen_sug = "Quebradita"
@@ -197,19 +198,22 @@ with tabs[0]:
                     sugerencia_item = obtener_sugerencia_dinamica(gen_sug)
                     reply = f"🎶 **Sugerencia dinámica para {gen_sug}:**\nTe recomiendo probar con: **{sugerencia_item}**."
                 
+                # 2. Vestuario basado en la última canción evaluada
                 elif "vestuario" in prompt_lower:
-                    if "salsa" in prompt_lower: gen_vest = "Salsa"
-                    elif "bachata" in prompt_lower: gen_vest = "Bachata"
-                    elif "quebradita" in prompt_lower: gen_vest = "Quebradita"
-                    else: gen_vest = "Timba"
-                    reply = obtener_vestuario(gen_vest)
+                    if st.session_state.ultimo_genero_evaluado:
+                        gen_vest = st.session_state.ultimo_genero_evaluado
+                        reply = f"ℹ️ *Basado en la última canción evaluada ({gen_vest}):*\n\n" + obtener_vestuario_competencia(gen_vest)
+                    else:
+                        reply = "⚠️ Aún no has evaluado ninguna canción en esta sesión. Por favor evalúa una pista primero o especifica el género para darte opciones de vestuario de competencia."
                 
+                # 3. Evaluación de pistas
                 else:
                     resultado = analizar_entrada(prompt)
                     if not resultado["es_valido"]:
                         reply = f"""⚠️ **Audio Rechazado (Contenido No Musical)**\n🎵 *{resultado['titulo']}*\n\nEl sistema detectó que corresponde a contenido hablado o no musical."""
                     else:
                         prediccion = resultado["genero"]
+                        st.session_state.ultimo_genero_evaluado = prediccion  # Guardamos el género evaluado
                         par, grp, sol, metrica, aprovechamiento = obtener_detalles_coreograficos(prediccion)
                         entrenamiento_agilidad = CATALOGO_AGILIDAD.get(prediccion, "")
                         
@@ -238,6 +242,19 @@ with tabs[0]:
 
                 st.markdown(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
+
+    # Script dinámico para mantener la página desplazada siempre al final del contenido
+    components.html(
+        """
+        <script>
+            const doc = window.parent.document;
+            setTimeout(() => {
+                doc.window.scrollTo(0, doc.body.scrollHeight);
+            }, 100);
+        </script>
+        """,
+        height=0,
+    )
 
 with tabs[1]:
     st.subheader("📊 Historial de Evaluaciones y Exportación")
