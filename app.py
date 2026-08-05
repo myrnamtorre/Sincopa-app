@@ -8,7 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 import streamlit as st
 
 # ==========================================
-# 1. CONFIGURACIÓN Y ESTILOS (BARRA AL FINAL)
+# 1. CONFIGURACIÓN Y ESTILOS (CAJA AMPLIADA AL FINAL)
 # ==========================================
 st.set_page_config(page_title="Síncopa - Asistente Coreográfico", page_icon="💃", layout="wide")
 st.markdown(
@@ -17,8 +17,23 @@ st.markdown(
     .main-header { font-size: 2.2rem; font-weight: 700; color: #E63946; text-align: center; margin-bottom: 0.5rem; }
     .sub-header { font-size: 1.1rem; color: #457B9D; text-align: center; margin-bottom: 1.5rem; }
     .stChatMessage { border-radius: 12px; }
-    /* Fija la barra de texto al final */
-    .stChatInput { position: fixed; bottom: 0; background: white; z-index: 100; }
+    
+    /* Amplía el cuadro de texto y lo fija al fondo de la pantalla */
+    .stChatInput { 
+        position: fixed; 
+        bottom: 0; 
+        left: 0; 
+        right: 0; 
+        padding: 1rem; 
+        background: rgba(255, 255, 255, 0.95); 
+        z-index: 100; 
+    }
+    
+    /* Aumenta la altura y tamaño interno del textarea */
+    .stChatInput textarea {
+        height: 90px !important;
+        font-size: 1rem !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -151,7 +166,6 @@ def obtener_detalles_coreograficos(genero):
     }
     return datos.get(genero, (0,0,0,"",""))
 
-# Entrenamiento enfocado estrictamente en agilidad con justificación técnica
 CATALOGO_AGILIDAD = {
     "Quebradita": "⚡ **Entrenamiento de Agilidad:** Saltos pliométricos cortos (2x30s) y sentadillas explosivas.\n> *¿Por qué?* Desarrolla la potencia en el tren inferior requerida para el rebote constante y la estabilidad en acrobacias.",
     "Bachata": "⚡ **Entrenamiento de Agilidad:** Giros en eje sobre una sola pierna y movilidad pélvica aislada (3 series de 10 reps).\n> *¿Por qué?* Mejora el control del centro de gravedad y la transición fluida de caderas sin perder el tiempo fuerte.",
@@ -174,7 +188,6 @@ with tabs[0]:
             with st.chat_message("assistant"):
                 prompt_lower = prompt.lower()
                 
-                # Identificador de solicitudes de sugerencias de manera dinámica
                 if any(g in prompt_lower for g in ["salsa", "bachata", "quebradita", "timba"]) and ("sugerencia" in prompt_lower or "dame" in prompt_lower or "recomienda" in prompt_lower or "canción" in prompt_lower or "canciones" in prompt_lower):
                     if "salsa" in prompt_lower: gen_sug = "Salsa"
                     elif "bachata" in prompt_lower: gen_sug = "Bachata"
@@ -184,7 +197,6 @@ with tabs[0]:
                     sugerencia_item = obtener_sugerencia_dinamica(gen_sug)
                     reply = f"🎶 **Sugerencia dinámica para {gen_sug}:**\nTe recomiendo probar con: **{sugerencia_item}**."
                 
-                # Identificador de solicitudes de vestuario
                 elif "vestuario" in prompt_lower:
                     if "salsa" in prompt_lower: gen_vest = "Salsa"
                     elif "bachata" in prompt_lower: gen_vest = "Bachata"
@@ -233,7 +245,6 @@ with tabs[1]:
         df_historial = pd.DataFrame(st.session_state.historial_evaluaciones)
         st.dataframe(df_historial, use_container_width=True)
         
-        # Opción para descargar las evaluaciones consultadas
         csv_data = df_historial.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Descargar Evaluaciones en CSV",
