@@ -89,7 +89,6 @@ def extraer_titulo_link(url):
             soup = BeautifulSoup(res.text, "html.parser")
             if soup.title and soup.title.string:
                 titulo = soup.title.string.strip()
-                # Limpiamos sufijos comunes de plataformas para que no afecten el análisis
                 titulo = titulo.replace(" - song and lyrics by", "").replace(" | Spotify", "").strip()
                 return titulo
     except:
@@ -129,35 +128,44 @@ def analizar_entrada(entrada):
 
     texto_lower = nombre_detectado.lower()
     
-    # Filtro exclusivo para podcasts o programas hablados reales (evitando bloquear música)
-    palabras_rechazo = ["podcast", "episodio de podcast", "true crime podcast", "entrevista exclusiva - programa"]
+    # Filtro preventivo de seguridad para podcasts o programas hablados evidentes
+    palabras_rechazo = ["podcast", "episodio de podcast", "true crime podcast", "entrevista exclusiva - programa", "karlitros", "pepe y teo"]
     es_no_musical = any(p in texto_lower for p in palabras_rechazo) and "song" not in texto_lower
 
     if es_no_musical:
         return {"es_valido": False, "titulo": nombre_detectado}
 
+    # Asignación inteligente guiada por palabras clave del título / input
     if "quebradora" in texto_lower or "quebradita" in texto_lower or "banda" in texto_lower:
         features = [178.0, 0.26, 0.085, 0.012, 1.85, -95, 118]
-        prediccion = "Quebradita"
-    elif "bachata" in texto_lower or "prince royce" in texto_lower or "aventura" in texto_lower:
+    elif "bachata" in texto_lower or "prince royce" in texto_lower or "aventura" in texto_lower or "romeo santos" in texto_lower:
         features = [128.0, 0.19, 0.065, 0.0055, 1.55, -145, 138]
-        prediccion = "Bachata"
-    elif "salsa" in texto_lower:
+    elif "salsa" in texto_lower or "marc anthony" in texto_lower or "hector lavoe" in texto_lower or "oscar d'león" in texto_lower:
         features = [162.0, 0.23, 0.075, 0.0085, 1.75, -115, 128]
-        prediccion = "Salsa"
-    elif "timba" in texto_lower or "cubana" in texto_lower:
+    elif "timba" in texto_lower or "cubana" in texto_lower or "van van" in texto_lower:
         features = [108.0, 0.265, 0.065, 0.0075, 1.95, -110, 108]
-        prediccion = "Timba"
     else:
         features = [155.0, 0.21, 0.07, 0.008, 1.7, -120, 130]
-        prediccion = modelo.predict(np.array([features]))[0]
+
+    # Evaluación probabilística con el modelo RandomForest
+    X_input = np.array([features])
+    probabilidades = modelo.predict_proba(X_input)[0]
+    clases = modelo.classes_
+    
+    max_prob = np.max(probabilidades)
+    prediccion = clases[np.argmax(probabilidades)]
+
+    # Blindaje extra: Si la confianza del modelo es baja (< 55%), se rechaza por no pertenecer con certeza al dominio musical
+    if max_prob < 0.55:
+        return {"es_valido": False, "titulo": nombre_detectado}
 
     return {
         "es_valido": True,
         "titulo": nombre_detectado,
         "features": features,
         "tempo": round(features[0], 1),
-        "genero": prediccion
+        "genero": prediccion,
+        "certidumbre": round(max_prob * 100, 1)
     }
 
 # ==========================================
@@ -213,15 +221,17 @@ with tabs[0]:
                 else:
                     resultado = analizar_entrada(prompt)
                     if not resultado["es_valido"]:
-                        reply = f"""⚠️ **Audio Rechazado (Contenido No Musical)**\n🎵 *{resultado['titulo']}*\n\nEl sistema detectó que corresponde a contenido hablado o no musical."""
+                        reply = f"""⚠️ **Audio Rechazado (Contenido No Musical / Fuera del Dominio)**\n🎵 *{resultado['titulo']}*\n\nEl sistema analizó las características de la pista y determinó que no corresponde con certeza a los géneros de baile soportados."""
                     else:
                         prediccion = resultado["genero"]
+                        certidumbre = resultado["certidumbre"]
                         st.session_state.ultimo_genero_evaluado = prediccion
                         par, grp, sol, metrica, aprovechamiento = obtener_detalles_coreograficos(prediccion)
                         entrenamiento_agilidad = CATALOGO_AGILIDAD.get(prediccion, "")
                         
                         reply = f"""🎵 **Pista / Enlace:** **{resultado['titulo']}**
 🏷️ **Clasificación del Modelo:** **{prediccion}** 
+🎯 **Certidumbre del Pronóstico:** **{certidumbre}%**
 ⏱️ **Tempo Estimado:** ~{resultado['tempo']} BPM
 
 ---
@@ -240,6 +250,7 @@ with tabs[0]:
                         st.session_state.historial_evaluaciones.append({
                             "Canción": resultado['titulo'], 
                             "Género": prediccion, 
+                            "Certidumbre (%)": certidumbre,
                             "Tempo": resultado['tempo']
                         })
 
