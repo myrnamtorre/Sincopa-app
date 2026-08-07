@@ -30,14 +30,14 @@ El diseño tiene un solo objetivo: que **el modelo y la app nunca puedan desincr
 
 ```
 ┌─────────────────────────┐
-│   sincopa_core.py        │  ← única fuente de verdad
-│   (features, dataset,    │
+│   sincopa_core.py         │  ← única fuente de verdad
+│   (features, dataset,     │
 │   entrenamiento, catálogos)│
-└───────────┬──────────────┘
+└───────────┬───────────────┘
             │
    ┌────────┴────────┬──────────────────┐
    │                  │                  │
-entrenar_modelo.py   app.py     Sincopa_Entrenamiento_v4
+sincopa.py           app.py     Sincopa_Entrenamiento_v4
    │                  │           _autocontenido.ipynb
    ▼                  ▼
 modelo_sincopa_rf.joblib  ←── app.py lo carga directo
@@ -53,9 +53,11 @@ Si algún día necesitas cambiar un rango de tempo, agregar un género o ajustar
 |---|---|
 | `sincopa_core.py` | Módulo central: carga del dataset, esquema de features, entrenamiento del modelo, búsqueda de canciones reales, clasificador de tipo de contenido, catálogos de sugerencias/entrenamiento/vestuario, generador de comentarios de aprovechamiento. |
 | `app.py` | La app de Streamlit (interfaz de chat). |
-| `entrenar_modelo.py` | Script standalone para (re)entrenar el modelo y generar el `.joblib`. |
+| `sincopa.py` | Script standalone para (re)entrenar el modelo y generar el `.joblib`. |
 | `modelo_sincopa_rf.joblib` | Modelo `RandomForestClassifier` ya entrenado, listo para usar. |
 | `dataset_bachata_salsa_quebradita.csv` | Dataset real: 482 canciones (Spotify + SoundCloud), 3 clases. |
+| `requirements.txt` | Dependencias de Python que instala Streamlit Cloud (o `pip`) para correr la app. |
+| `packages.txt` | Dependencias de sistema (a nivel de SO, vía `apt-get`) que necesita el entorno de Streamlit Cloud, si aplica. |
 | `Sincopa_Entrenamiento_v4_autocontenido.ipynb` | Notebook de Colab/Jupyter, autocontenido (genera `sincopa_core.py` con `%%writefile`), documenta y reproduce el entrenamiento paso a paso. |
 
 ---
@@ -102,7 +104,7 @@ densidad_tatum, num_secciones, num_compases, num_tiempos_beats
 Si quieres ampliar el dataset (más canciones, un género nuevo), solo necesitas:
 1. Agregar filas al CSV con las mismas columnas.
 2. Si agregas un género nuevo, agrégalo también a `sincopa_core.PALABRAS_GENERO_BASE`, `CATALOGO_SUGERENCIAS`, `CATALOGO_ENTRENAMIENTOS`, `CATALOGO_VESTUARIO` y `DETALLES_COREOGRAFICOS`.
-3. Correr `entrenar_modelo.py` de nuevo.
+3. Correr `sincopa.py` de nuevo.
 
 ---
 
@@ -124,7 +126,7 @@ python3 -m venv venv
 source venv/bin/activate      # en Windows: venv\Scripts\activate
 
 # 3. Instalar dependencias
-pip install streamlit pandas numpy scikit-learn joblib requests beautifulsoup4
+pip install -r requirements.txt
 
 # 4. Correr la app
 streamlit run app.py
@@ -141,7 +143,7 @@ Streamlit abrirá automáticamente `http://localhost:8501` en tu navegador. Si `
 Si modificaste el dataset o quieres regenerar el `.joblib` desde cero:
 
 ```bash
-python entrenar_modelo.py
+python sincopa.py
 ```
 
 Esto imprime el accuracy en un holdout del 20% y guarda `modelo_sincopa_rf.joblib` en la carpeta actual, listo para que `app.py` lo recoja en el siguiente arranque.
@@ -163,7 +165,7 @@ Esto imprime el accuracy en un holdout del 20% y guarda `modelo_sincopa_rf.jobli
 ## Desplegar en Streamlit Community Cloud
 
 1. Sube este repositorio a GitHub (incluyendo `modelo_sincopa_rf.joblib` y el `.csv`).
-2. Crea un archivo `requirements.txt` en la raíz con:
+2. Confirma que `requirements.txt` esté en la raíz con las dependencias de Python:
    ```
    streamlit
    pandas
@@ -173,6 +175,7 @@ Esto imprime el accuracy en un holdout del 20% y guarda `modelo_sincopa_rf.jobli
    requests
    beautifulsoup4
    ```
+   Si tu entorno necesita alguna dependencia de sistema (poco común para este proyecto), agrégala a `packages.txt` — una por línea, como si fuera `apt-get install <paquete>`.
 3. Ve a [share.streamlit.io](https://share.streamlit.io), conecta tu cuenta de GitHub y selecciona el repositorio.
 4. Indica `app.py` como archivo principal.
 5. Deploy. La primera carga puede tardar un poco mientras Streamlit instala las dependencias.
@@ -195,10 +198,10 @@ Esto imprime el accuracy en un holdout del 20% y guarda `modelo_sincopa_rf.jobli
 Si no encuentra `modelo_sincopa_rf.joblib`, lo entrena en memoria al vuelo. Confirma que el archivo `.joblib` esté en la misma carpeta que `app.py`.
 
 **`ModuleNotFoundError: No module named 'sincopa_core'`.**
-`app.py` y `entrenar_modelo.py` deben estar en la **misma carpeta** que `sincopa_core.py`; Python los importa por ruta relativa.
+`app.py` y `sincopa.py` deben estar en la **misma carpeta** que `sincopa_core.py`; Python los importa por ruta relativa.
 
 **Quiero agregar un género nuevo.**
-Necesitas: (1) canciones reales etiquetadas con ese género en el CSV, (2) agregar el género a los catálogos en `sincopa_core.py` (sugerencias, entrenamientos, vestuario, detalles coreográficos), y (3) correr `entrenar_modelo.py` de nuevo.
+Necesitas: (1) canciones reales etiquetadas con ese género en el CSV, (2) agregar el género a los catálogos en `sincopa_core.py` (sugerencias, entrenamientos, vestuario, detalles coreográficos), y (3) correr `sincopa.py` de nuevo.
 
 **El modelo predice con 100% de confianza casi siempre.**
 Es esperable: los rangos de tempo entre Bachata, Salsa y Quebradita en el dataset real no se solapan, así que el bosque aleatorio separa las clases con muy poco margen de error. Esto puede cambiar si agregas géneros con rangos de tempo más parecidos entre sí.
