@@ -55,6 +55,8 @@ if "messages" not in st.session_state:
         "role": "assistant",
         "content": "👋 **¡Hola! Soy Síncopa**, tu asistente coreográfico.\n\n"
                    "🎯 **Puedo ayudarte a evaluar pistas de:** Bachata, Salsa (incluye Timba cubana) y Quebradita.\n\n"
+                   "🔗 **Pégame el link de la canción** desde **Spotify, YouTube o Apple Music** (o escribe el "
+                   "título como `Artista - Canción`).\n\n"
                    "⚠️ **Cómo trabajo:**\n"
                    "1. Si tu canción está en mi base de datos real (482 pistas), uso sus características exactas.\n"
                    "2. Si no la reconozco, estimo un perfil rítmico plausible dentro del rango real observado "
@@ -75,6 +77,13 @@ if "ultimo_genero_evaluado" not in st.session_state:
 # ==========================================
 # 3. EXTRACCIÓN DE TÍTULO DESDE ENLACES
 # ==========================================
+PLATAFORMAS_SOPORTADAS = ("youtube.com", "youtu.be", "open.spotify.com", "music.apple.com")
+
+
+def es_plataforma_soportada(url):
+    return any(p in url for p in PLATAFORMAS_SOPORTADAS)
+
+
 @st.cache_data(ttl=3600)
 def extraer_titulo_link(url):
     try:
@@ -88,8 +97,11 @@ def extraer_titulo_link(url):
             soup = BeautifulSoup(res.text, "html.parser")
             if soup.title and soup.title.string:
                 titulo = soup.title.string.strip()
-                titulo = titulo.replace(" - song and lyrics by", "").replace(" | Spotify", "").strip()
-                return titulo
+                # Limpieza de sufijos típicos de cada plataforma
+                for sufijo in (" - song and lyrics by", " | Spotify", " on Apple Music", " - Single by",
+                               " - Album by", " on Spotify"):
+                    titulo = titulo.split(sufijo)[0]
+                return titulo.strip()
     except Exception:
         pass
     return url
@@ -104,7 +116,10 @@ def extraer_titulo_link(url):
 #               del género detectado por palabra clave.
 # ==========================================
 def analizar_entrada(entrada):
-    if entrada.strip().startswith("http"):
+    entrada = entrada.strip()
+    if entrada.startswith("http"):
+        if not es_plataforma_soportada(entrada):
+            return {"tipo": "plataforma_no_soportada", "titulo": entrada}
         titulo = extraer_titulo_link(entrada)
     else:
         titulo = entrada
@@ -156,14 +171,18 @@ def analizar_entrada(entrada):
 # 5. UI
 # ==========================================
 st.markdown('<div class="main-header">💃 Síncopa - Asistente Coreográfico</div>', unsafe_allow_html=True)
-tabs = st.tabs(["💬 Chat Asistente", "📊 Historial y Descarga", "⚙️ Modelo"])
+st.markdown(
+    '<div class="sub-header">Pega el link de Spotify, YouTube o Apple Music de la canción que quieres evaluar</div>',
+    unsafe_allow_html=True,
+)
+tabs = st.tabs(["💬 Chat Asistente", "📊 Historial y Descarga"])
 
 with tabs[0]:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Pega el enlace, pide sugerencias, vestuario o entrenamiento..."):
+    if prompt := st.chat_input("Pega el link de Spotify/YouTube/Apple Music, pide sugerencias, vestuario o entrenamiento..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -208,7 +227,13 @@ with tabs[0]:
                 resultado = analizar_entrada(prompt)
                 tipo = resultado["tipo"]
 
-                if tipo == "no_musical":
+                if tipo == "plataforma_no_soportada":
+                    reply = (f"🔗 **Enlace no soportado**\n📄 *{resultado['titulo']}*\n\n"
+                              "Por ahora solo puedo leer enlaces de **Spotify, YouTube o Apple Music**. "
+                              "Pégame el link desde alguna de esas plataformas, o escribe el título como "
+                              "`Artista - Canción`.")
+
+                elif tipo == "no_musical":
                     reply = (f"🗣️ **Contenido no musical detectado**\n📄 *{resultado['titulo']}*\n\n"
                               "Esto parece ser voz hablada (podcast, entrevista, tutorial, etc.), sin estructura "
                               "métrica musical. No hay nada que evaluar coreográficamente.")
@@ -298,15 +323,3 @@ with tabs[1]:
                             file_name="historial_evaluaciones_sincopa.csv", mime="text/csv")
     else:
         st.info("Aún no hay canciones evaluadas en el historial.")
-
-with tabs[2]:
-    st.json({
-        "Algoritmo": "RandomForestClassifier",
-        "Origen del modelo cargado": origen_modelo,
-        "Dataset": "dataset_bachata_salsa_quebradita.csv (482 canciones reales)",
-        "Features": sc.FEATURES,
-        "Clases del modelo": list(modelo.classes_),
-        "Nota": "Timba se identifica por palabras clave como variante de Salsa para elegir catálogo de "
-                "sugerencias/entrenamiento/vestuario, pero el modelo solo predice las 3 clases presentes "
-                "en el dataset real.",
-    })
